@@ -29,6 +29,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+bookclub-dev.*.log
 
 # env files (can opt-in for committing if needed)
 .env*
@@ -41,3 +42,27 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# Node
+node_modules
+.next
+.env
+
+# Logs
+*.log
+
+# Temp / system files
+.tmp*
+tmp*
+*.stderr.log
+*.stdout.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+.tmp*
+tmp*
+*.log
+*.stderr.log
+*.stdout.log

@@ -3,12 +3,57 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+function requireEnv(name: string) {
+  const value = process.env[name];
+
+  if (!value) {
+    throw new Error(`${name} is not configured.`);
+  }
+
+  return value;
+}
+
+function normalizePostgresUrl(value: string) {
+  const url = new URL(value);
+
+  if (url.hostname === "localhost") {
+    url.hostname = "127.0.0.1";
+  }
+
+  return url.toString();
+}
+
+function getDefaultShadowDatabaseUrl(baseUrl: string) {
+  const url = new URL(baseUrl);
+  const databaseName = url.pathname.replace(/^\//, "");
+
+  if (!databaseName) {
+    throw new Error(
+      "DIRECT_URL must include a database name so Prisma can derive a shadow database URL.",
+    );
+  }
+
+  url.pathname = `/${databaseName}_shadow`;
+  return url.toString();
+}
+
+const databaseUrl = normalizePostgresUrl(requireEnv("DATABASE_URL"));
+const directUrl = normalizePostgresUrl(
+  process.env.DIRECT_URL ?? databaseUrl,
+);
+const shadowDatabaseUrl = normalizePostgresUrl(
+  process.env.SHADOW_DATABASE_URL ??
+    getDefaultShadowDatabaseUrl(directUrl),
+);
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
+    seed: "tsx prisma/seed.ts",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: directUrl,
+    shadowDatabaseUrl,
   },
 });

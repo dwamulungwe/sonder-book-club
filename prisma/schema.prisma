@@ -1,13 +1,501 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum SystemRole {
+  ADMIN
+  MODERATOR
+  MEMBER
+  GUEST
+}
+
+enum MembershipStatus {
+  ACTIVE
+  SUSPENDED
+  LEFT
+}
+
+enum BookStatus {
+  NOMINATED
+  BACKLOG
+  CURRENT
+  COMPLETED
+  ARCHIVED
+}
+
+enum ReadingPlanStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum TargetMode {
+  PAGES
+  CHAPTERS
+}
+
+enum ReadingPlanItemStatus {
+  UPCOMING
+  IN_PROGRESS
+  COMPLETED
+  SKIPPED
+}
+
+enum RsvpStatus {
+  GOING
+  MAYBE
+  DECLINED
+}
+
+enum AttendanceStatus {
+  PENDING
+  ATTENDED
+  ABSENT
+  EXCUSED
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+}
+
+enum MeetingNoteVisibility {
+  INTERNAL
+  MEMBERS_ONLY
+}
+
+enum NominationStatus {
+  ACTIVE
+  WITHDRAWN
+  SELECTED
+  ARCHIVED
+}
+
+enum PollStatus {
+  DRAFT
+  OPEN
+  CLOSED
+  CANCELLED
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  WAIVED
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  MOBILE_MONEY
+  BANK_TRANSFER
+  CARD
+  OTHER
+}
+
+model User {
+  id                   String              @id @default(cuid())
+  name                 String
+  email                String              @unique
+  emailVerified        DateTime?
+  image                String?
+  passwordHash         String?
+  systemRole           SystemRole          @default(GUEST)
+  membership           Membership?
+  createdBooks         Book[]              @relation("BookCreator")
+  createdPlans         ReadingPlan[]       @relation("PlanCreator")
+  progresses           ReadingProgress[]
+  createdMeetings      Meeting[]           @relation("MeetingCreator")
+  rsvps                MeetingRsvp[]
+  attendances          MeetingAttendance[] @relation("AttendanceMember")
+  recordedAttendances  MeetingAttendance[] @relation("AttendanceRecorder")
+  meetingNotesAuthored MeetingNote[]       @relation("MeetingNoteAuthor")
+  createdAnnouncements Announcement[]      @relation("AnnouncementCreator")
+  nominations          BookNomination[]
+  createdPolls         Poll[]              @relation("PollCreator")
+  votes                PollVote[]
+  recordedPayments     MembershipPayment[] @relation("PaymentRecorder")
+  accounts             Account[]
+  sessions             Session[]
+  deletedAt            DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([systemRole])
+  @@index([deletedAt])
+  @@map("users")
+}
+
+model ClubSettings {
+  id               String   @id
+  name             String
+  description      String?
+  meetingFrequency String?
+  location         String?
+  contactEmail     String?
+  contactPhone     String?
+  logoUrl          String?
+  bannerUrl        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("club_settings")
+}
+
+model Membership {
+  id        String           @id @default(cuid())
+  userId    String           @unique
+  role      SystemRole       @default(MEMBER)
+  status    MembershipStatus @default(ACTIVE)
+  joinedAt  DateTime         @default(now())
+  payments  MembershipPayment[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([role, status])
+  @@map("memberships")
+}
+
+model Book {
+  id          String           @id @default(cuid())
+  title       String
+  author      String
+  genre       String?
+  isbn        String?
+  pageCount   Int?
+  coverUrl    String?
+  summary     String?
+  status      BookStatus       @default(BACKLOG)
+  archivedAt  DateTime?
+  deletedAt   DateTime?
+  createdById String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  createdBy   User             @relation("BookCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  readingPlans ReadingPlan[]
+  nominations BookNomination[]
+  pollWins    Poll[]           @relation("WinningBook")
+  pollOptions PollOption[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("books")
+}
+
+model ReadingPlan {
+  id           String             @id @default(cuid())
+  bookId        String
+  title         String
+  targetMode    TargetMode
+  status        ReadingPlanStatus @default(ACTIVE)
+  weekCount     Int
+  chapterCount  Int?
+  isActive      Boolean           @default(true)
+  createdById   String
+  startsOn      DateTime
+  endsOn        DateTime
+  deletedAt     DateTime?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  book          Book              @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  createdBy     User              @relation("PlanCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  targets       ReadingTarget[]
+
+  @@index([status])
+  @@index([isActive])
+  @@index([bookId])
+  @@index([deletedAt])
+  @@map("reading_plans")
+}
+
+model ReadingTarget {
+  id            String                @id @default(cuid())
+  readingPlanId String
+  sequence      Int
+  label         String
+  mode          TargetMode
+  status        ReadingPlanItemStatus @default(UPCOMING)
+  startPage     Int?
+  endPage       Int?
+  startChapter  Int?
+  endChapter    Int?
+  startsOn      DateTime
+  endsOn        DateTime
+  deletedAt     DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  readingPlan   ReadingPlan           @relation(fields: [readingPlanId], references: [id], onDelete: Cascade)
+  progresses    ReadingProgress[]
+
+  @@unique([readingPlanId, sequence])
+  @@index([readingPlanId, startsOn])
+  @@index([readingPlanId, status])
+  @@index([deletedAt])
+  @@map("reading_plan_items")
+}
+
+model ReadingProgress {
+  id          String        @id @default(cuid())
+  targetId    String
+  memberId    String
+  percent     Int           @default(0)
+  notes       String?
+  completedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  target      ReadingTarget @relation(fields: [targetId], references: [id], onDelete: Cascade)
+  member      User          @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([targetId, memberId])
+  @@index([memberId, updatedAt])
+  @@index([targetId, percent])
+  @@map("member_progress")
+}
+
+model Meeting {
+  id           String              @id @default(cuid())
+  title        String
+  agenda       String?
+  status       MeetingStatus       @default(SCHEDULED)
+  startsAt     DateTime
+  location     String?
+  meetingLink  String?
+  notes        String?
+  createdById  String
+  deletedAt    DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  createdBy    User                @relation("MeetingCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  rsvps        MeetingRsvp[]
+  attendances  MeetingAttendance[]
+  meetingNotes MeetingNote[]
+
+  @@index([startsAt])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("meetings")
+}
+
+model MeetingRsvp {
+  id        String     @id @default(cuid())
+  meetingId String
+  memberId  String
+  status    RsvpStatus @default(MAYBE)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  meeting   Meeting    @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  member    User       @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, memberId])
+  @@index([meetingId, status])
+  @@index([memberId, status])
+  @@map("meeting_rsvps")
+}
+
+model MeetingAttendance {
+  id           String            @id @default(cuid())
+  meetingId    String
+  memberId     String
+  status       AttendanceStatus  @default(PENDING)
+  recordedById String?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  meeting      Meeting           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  member       User              @relation("AttendanceMember", fields: [memberId], references: [id], onDelete: Cascade)
+  recordedBy   User?             @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([meetingId, memberId])
+  @@index([meetingId, status])
+  @@index([memberId, status])
+  @@map("meeting_attendance")
+}
+
+model MeetingNote {
+  id         String               @id @default(cuid())
+  meetingId  String
+  authorId   String
+  title      String?
+  content    String
+  visibility MeetingNoteVisibility @default(MEMBERS_ONLY)
+  deletedAt  DateTime?
+  createdAt  DateTime             @default(now())
+  updatedAt  DateTime             @updatedAt
+  meeting    Meeting              @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  author     User                 @relation("MeetingNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId, createdAt])
+  @@index([authorId, createdAt])
+  @@index([deletedAt])
+  @@map("meeting_notes")
+}
+
+model Announcement {
+  id          String              @id @default(cuid())
+  title       String
+  body        String
+  status      AnnouncementStatus  @default(PUBLISHED)
+  createdById String
+  deletedAt   DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  createdBy   User                @relation("AnnouncementCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  @@index([createdAt])
+  @@index([status])
+  @@index([deletedAt])
+  @@map("announcements")
+}
+
+model BookNomination {
+  id          String            @id @default(cuid())
+  bookId       String           @unique
+  nominatorId  String
+  reason       String?
+  status       NominationStatus @default(ACTIVE)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  book         Book             @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  nominator    User             @relation(fields: [nominatorId], references: [id], onDelete: Cascade)
+  pollOptions  PollOption[]
+
+  @@index([createdAt])
+  @@index([status])
+  @@map("book_nominations")
+}
+
+model Poll {
+  id            String      @id @default(cuid())
+  title         String
+  description   String?
+  status        PollStatus  @default(DRAFT)
+  opensAt       DateTime
+  closesAt      DateTime
+  closedAt      DateTime?
+  createdById   String
+  winningBookId String?
+  deletedAt     DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  createdBy     User        @relation("PollCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  winningBook   Book?       @relation("WinningBook", fields: [winningBookId], references: [id], onDelete: SetNull)
+  options       PollOption[]
+  votes         PollVote[]
+
+  @@index([status])
+  @@index([opensAt])
+  @@index([closesAt])
+  @@index([deletedAt])
+  @@map("polls")
+}
+
+model PollOption {
+  id           String         @id @default(cuid())
+  pollId       String
+  nominationId String
+  bookId       String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  poll         Poll           @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  nomination   BookNomination @relation(fields: [nominationId], references: [id], onDelete: Cascade)
+  book         Book           @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  votes        PollVote[]
+
+  @@unique([pollId, bookId])
+  @@index([pollId])
+  @@map("poll_options")
+}
+
+model PollVote {
+  id        String     @id @default(cuid())
+  pollId    String
+  optionId  String
+  voterId   String
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  poll      Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  option    PollOption @relation(fields: [optionId], references: [id], onDelete: Cascade)
+  voter     User       @relation(fields: [voterId], references: [id], onDelete: Cascade)
+
+  @@unique([pollId, voterId])
+  @@index([optionId, createdAt])
+  @@index([voterId, createdAt])
+  @@map("votes")
+}
+
+model MembershipPayment {
+  id           String          @id @default(cuid())
+  membershipId String
+  amount       Decimal         @db.Decimal(10, 2)
+  currency     String          @db.VarChar(3)
+  status       PaymentStatus   @default(PENDING)
+  method       PaymentMethod?
+  reference    String?         @unique
+  dueAt        DateTime
+  paidAt       DateTime?
+  periodStart  DateTime?
+  periodEnd    DateTime?
+  notes        String?
+  recordedById String?
+  deletedAt    DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  membership   Membership      @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  recordedBy   User?           @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([membershipId, periodStart, periodEnd])
+  @@index([membershipId, status])
+  @@index([dueAt, status])
+  @@index([deletedAt])
+  @@map("membership_payments")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }

@@ -135,7 +135,6 @@ async function main() {
       title: "Tomorrow, and Tomorrow, and Tomorrow",
       author: "Gabrielle Zevin",
       genre: "Literary fiction",
-      isbn: "9780593321201",
       pageCount: 416,
       coverUrl:
         "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=900&q=80",
@@ -151,7 +150,6 @@ async function main() {
       title: "Sea of Tranquility",
       author: "Emily St. John Mandel",
       genre: "Speculative fiction",
-      isbn: "9780593321447",
       pageCount: 272,
       summary:
         "A compact, time-bending novel about plague years, memory, and the echoes that travel with us.",
@@ -165,7 +163,6 @@ async function main() {
       title: "The Left Hand of Darkness",
       author: "Ursula K. Le Guin",
       genre: "Science fiction",
-      isbn: "9780441478125",
       pageCount: 304,
       summary:
         "A diplomatic mission unfolds on a world where politics, climate, and gender all unsettle easy assumptions.",

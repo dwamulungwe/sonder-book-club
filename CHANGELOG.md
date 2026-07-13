@@ -2,6 +2,17 @@
 
 All notable changes to Sonder Book Club are documented in this file.
 
+## Unreleased
+
+### Changed
+
+- Began the v0.2 community transition by renaming the dashboard navigation and metadata to Home, adding a Community home introduction, and linking members to updates, reading progress, voting, and meetings.
+- Removed ISBN from book forms, validation, actions, the Prisma Book model, and seed data.
+
+### Database
+
+- Added `20260713_remove_book_isbn` to drop the obsolete `books.isbn` column without resetting or reseeding data.
+
 ## v0.1.0 - 2026-04-30
 
 First demo-ready release of the single-club Sonder Book Club MVP.

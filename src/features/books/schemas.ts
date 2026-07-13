@@ -13,10 +13,6 @@ export const bookSchema = z.object({
     .string()
     .max(80, "Genre must be 80 characters or fewer.")
     .optional(),
-  isbn: z
-    .string()
-    .max(32, "ISBN must be 32 characters or fewer.")
-    .optional(),
   pageCount: z
     .number()
     .int()

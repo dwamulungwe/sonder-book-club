@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation";
 import {
   BookOpenText,
   CalendarDays,
-  Gauge,
+  House,
   MapPin,
   Megaphone,
   Menu,
@@ -41,7 +41,7 @@ type AppShellProps = {
 };
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Gauge },
+  { href: "/dashboard", label: "Home", icon: House },
   { href: "/books", label: "Books", icon: BookOpenText },
   { href: "/reading-plan", label: "Reading Plan", icon: BookOpenText },
   { href: "/meetings", label: "Meetings", icon: CalendarDays },

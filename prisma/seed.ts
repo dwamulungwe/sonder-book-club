@@ -58,28 +58,26 @@ async function main() {
   const twoWeeksOut = addDays(now, 14);
   const lastWeek = addDays(now, -7);
 
-  await prisma.$transaction([
-    prisma.pollVote.deleteMany(),
-    prisma.pollOption.deleteMany(),
-    prisma.poll.deleteMany(),
-    prisma.bookNomination.deleteMany(),
-    prisma.meetingAttendance.deleteMany(),
-    prisma.meetingRsvp.deleteMany(),
-    prisma.meetingNote.deleteMany(),
-    prisma.meeting.deleteMany(),
-    prisma.readingProgress.deleteMany(),
-    prisma.readingTarget.deleteMany(),
-    prisma.readingPlan.deleteMany(),
-    prisma.announcement.deleteMany(),
-    prisma.membershipPayment.deleteMany(),
-    prisma.book.deleteMany(),
-    prisma.membership.deleteMany(),
-    prisma.clubSettings.deleteMany(),
-    prisma.session.deleteMany(),
-    prisma.account.deleteMany(),
-    prisma.verificationToken.deleteMany(),
-    prisma.user.deleteMany(),
-  ]);
+  await prisma.pollVote.deleteMany();
+  await prisma.pollOption.deleteMany();
+  await prisma.poll.deleteMany();
+  await prisma.bookNomination.deleteMany();
+  await prisma.meetingAttendance.deleteMany();
+  await prisma.meetingRsvp.deleteMany();
+  await prisma.meetingNote.deleteMany();
+  await prisma.meeting.deleteMany();
+  await prisma.readingProgress.deleteMany();
+  await prisma.readingTarget.deleteMany();
+  await prisma.readingPlan.deleteMany();
+  await prisma.announcement.deleteMany();
+  await prisma.membershipPayment.deleteMany();
+  await prisma.book.deleteMany();
+  await prisma.membership.deleteMany();
+  await prisma.clubSettings.deleteMany();
+  await prisma.session.deleteMany();
+  await prisma.account.deleteMany();
+  await prisma.verificationToken.deleteMany();
+  await prisma.user.deleteMany();
 
   await prisma.clubSettings.create({
     data: {

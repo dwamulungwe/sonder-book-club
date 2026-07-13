@@ -6,12 +6,14 @@ All notable changes to Sonder Book Club are documented in this file.
 
 ### Changed
 
+- Added the Community Feed foundation with protected posting, comments, one-level replies, reactions, bookmarks, reporting, moderator review, and a community feed preview on Home.
 - Began the v0.2 community transition by renaming the dashboard navigation and metadata to Home, adding a Community home introduction, and linking members to updates, reading progress, voting, and meetings.
 - Added the member profile foundation with a protected My Profile page, profile editing, and profile-aware member directory cards.
 - Removed ISBN from book forms, validation, actions, the Prisma Book model, and seed data.
 
 ### Database
 
+- Added `20260713_community_feed_foundation` to create community posts, comments, reactions, bookmarks, and content reports.
 - Added `20260713_member_profile_foundation` to create the one-to-one member profile table.
 - Added `20260713_remove_book_isbn` to drop the obsolete `books.isbn` column without resetting or reseeding data.
 

@@ -3,12 +3,13 @@ import Link from "next/link";
 import {
   BookOpenText,
   CalendarDays,
-  Megaphone,
+  MessageCircle,
   Vote,
 } from "lucide-react";
 
 import { BrandLogo } from "@/components/app/brand-logo";
 import { EmptyState } from "@/components/app/empty-state";
+import { MemberAvatar } from "@/components/app/member-avatar";
 import { ProgressBar } from "@/components/app/progress-bar";
 import { SectionHeading } from "@/components/app/section-heading";
 import { StatusBadge } from "@/components/app/status-badge";
@@ -26,10 +27,10 @@ export const metadata: Metadata = {
 
 const quickActions = [
   {
-    href: "/announcements",
+    href: "/community",
     label: "Club updates",
-    description: "Read the latest notes and announcements from the club team.",
-    icon: Megaphone,
+    description: "See what members are sharing in the community feed.",
+    icon: MessageCircle,
   },
   {
     href: "/reading-plan",
@@ -71,6 +72,10 @@ function getFirstName(name?: string | null) {
   }
 
   return trimmedName.split(/\s+/)[0];
+}
+
+function formatPostType(value: string) {
+  return value.toLowerCase().replaceAll("_", " ");
 }
 
 export default async function DashboardPage() {
@@ -132,6 +137,62 @@ export default async function DashboardPage() {
           You can browse the club as a guest, but only members can RSVP, log reading progress, and vote.
         </section>
       ) : null}
+
+      <section className="rounded-[1.5rem] border border-stone-200 bg-white/90 p-5 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <SectionHeading
+            eyebrow="Community"
+            title="Recent from the feed"
+            description="A few live notes from the shared room before the rest of the club snapshot."
+          />
+          <Link
+            href="/community"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:border-stone-300 hover:bg-stone-50 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-stone-200"
+          >
+            Open feed
+          </Link>
+        </div>
+        {data.recentCommunityPosts.length > 0 ? (
+          <div className="mt-5 grid gap-4 lg:grid-cols-3">
+            {data.recentCommunityPosts.map((post) => (
+              <Link
+                key={post.id}
+                href="/community"
+                className="rounded-xl border border-stone-200 bg-[rgba(255,251,244,0.72)] p-4 transition-colors hover:border-stone-300 hover:bg-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-stone-200"
+              >
+                <div className="flex items-center gap-3">
+                  <MemberAvatar
+                    name={post.author.name}
+                    imageUrl={post.author.profile?.profileImageUrl}
+                    size="sm"
+                  />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-stone-950">
+                      {post.author.name}
+                    </p>
+                    <p className="text-xs capitalize text-stone-500">
+                      {formatPostType(post.postType)}
+                    </p>
+                  </div>
+                </div>
+                <p className="mt-3 line-clamp-3 text-sm leading-6 text-stone-700">
+                  {post.body ||
+                    post.listeningTitle ||
+                    post.relatedBook?.title ||
+                    "A new community update is waiting in the feed."}
+                </p>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <div className="mt-5">
+            <EmptyState
+              title="No community posts yet"
+              description="New member reflections and recommendations will appear here once the feed starts moving."
+            />
+          </div>
+        )}
+      </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SummaryCard

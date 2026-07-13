@@ -90,6 +90,30 @@ enum AnnouncementStatus {
   ARCHIVED
 }
 
+enum CommunityPostType {
+  GENERAL
+  READING_UPDATE
+  BOOK_RECOMMENDATION
+  CURRENTLY_LISTENING
+  ANNOUNCEMENT
+}
+
+enum PostReactionType {
+  INSIGHTFUL
+  BEAUTIFULLY_SAID
+  ADDING_TO_MY_LIST
+  I_AGREE
+  MADE_ME_THINK
+  APPLAUSE
+}
+
+enum ContentReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
 enum PaymentStatus {
   PENDING
   PAID
@@ -129,6 +153,12 @@ model User {
   createdPolls         Poll[]              @relation("PollCreator")
   votes                PollVote[]
   recordedPayments     MembershipPayment[] @relation("PaymentRecorder")
+  communityPosts       CommunityPost[]     @relation("CommunityPostAuthor")
+  postComments         PostComment[]       @relation("PostCommentAuthor")
+  postReactions        PostReaction[]
+  postBookmarks        PostBookmark[]
+  contentReports       ContentReport[]     @relation("ContentReportReporter")
+  reviewedReports      ContentReport[]     @relation("ContentReportReviewer")
   profile              MemberProfile?
   accounts             Account[]
   sessions             Session[]
@@ -216,6 +246,7 @@ model Book {
   nominations BookNomination[]
   pollWins    Poll[]           @relation("WinningBook")
   pollOptions PollOption[]
+  communityPosts CommunityPost[] @relation("CommunityPostBook")
 
   @@index([status])
   @@index([createdAt])
@@ -385,6 +416,112 @@ model Announcement {
   @@index([status])
   @@index([deletedAt])
   @@map("announcements")
+}
+
+model CommunityPost {
+  id               String            @id @default(cuid())
+  authorId         String
+  body             String            @db.VarChar(2000)
+  postType         CommunityPostType @default(GENERAL)
+  relatedBookId    String?
+  listeningTitle   String?           @db.VarChar(180)
+  listeningCreator String?           @db.VarChar(180)
+  listeningUrl     String?           @db.VarChar(500)
+  isPinned         Boolean           @default(false)
+  editedAt         DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  author           User              @relation("CommunityPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  relatedBook      Book?             @relation("CommunityPostBook", fields: [relatedBookId], references: [id], onDelete: SetNull)
+  comments         PostComment[]
+  reactions        PostReaction[]
+  bookmarks        PostBookmark[]
+  reports          ContentReport[]   @relation("ContentReportPost")
+
+  @@index([isPinned, createdAt])
+  @@index([authorId, createdAt])
+  @@index([postType, createdAt])
+  @@index([relatedBookId])
+  @@index([deletedAt])
+  @@map("community_posts")
+}
+
+model PostComment {
+  id              String          @id @default(cuid())
+  postId          String
+  authorId        String
+  parentCommentId String?
+  body            String          @db.VarChar(1200)
+  editedAt        DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  post            CommunityPost   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author          User            @relation("PostCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  parentComment   PostComment?    @relation("PostCommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         PostComment[]   @relation("PostCommentReplies")
+  reports         ContentReport[] @relation("ContentReportComment")
+
+  @@index([postId, createdAt])
+  @@index([authorId, createdAt])
+  @@index([parentCommentId])
+  @@index([deletedAt])
+  @@map("post_comments")
+}
+
+model PostReaction {
+  id           String           @id @default(cuid())
+  postId       String
+  userId       String
+  reactionType PostReactionType
+  createdAt    DateTime         @default(now())
+  post         CommunityPost    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId, reactionType])
+  @@index([userId, createdAt])
+  @@map("post_reactions")
+}
+
+model PostBookmark {
+  id        String        @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId, createdAt])
+  @@map("post_bookmarks")
+}
+
+model ContentReport {
+  id           String              @id @default(cuid())
+  postId       String?
+  commentId    String?
+  reporterId   String
+  reason       String              @db.VarChar(120)
+  details      String?             @db.VarChar(1000)
+  status       ContentReportStatus @default(OPEN)
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  post         CommunityPost?      @relation("ContentReportPost", fields: [postId], references: [id], onDelete: Cascade)
+  comment      PostComment?        @relation("ContentReportComment", fields: [commentId], references: [id], onDelete: Cascade)
+  reporter     User                @relation("ContentReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reviewedBy   User?               @relation("ContentReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([postId])
+  @@index([commentId])
+  @@index([reporterId, createdAt])
+  @@index([reviewedById])
+  @@map("content_reports")
 }
 
 model BookNomination {

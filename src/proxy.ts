@@ -6,6 +6,7 @@ const publicRoutes = new Set(["/login", "/signup", "/forgot-password"]);
 
 const protectedPrefixes = [
   "/dashboard",
+  "/community",
   "/books",
   "/reading-plan",
   "/meetings",

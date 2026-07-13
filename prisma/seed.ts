@@ -4,8 +4,10 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import {
   AttendanceStatus,
   BookStatus,
+  CommunityPostType,
   MembershipStatus,
   PollStatus,
+  PostReactionType,
   PrismaClient,
   RsvpStatus,
   SystemRole,
@@ -58,6 +60,11 @@ async function main() {
   const twoWeeksOut = addDays(now, 14);
   const lastWeek = addDays(now, -7);
 
+  await prisma.contentReport.deleteMany();
+  await prisma.postBookmark.deleteMany();
+  await prisma.postReaction.deleteMany();
+  await prisma.postComment.deleteMany();
+  await prisma.communityPost.deleteMany();
   await prisma.pollVote.deleteMany();
   await prisma.pollOption.deleteMany();
   await prisma.poll.deleteMany();
@@ -581,6 +588,106 @@ async function main() {
         voterId: member.id,
       },
     ],
+  });
+
+  const generalPost = await prisma.communityPost.create({
+    data: {
+      authorId: memberTwo.id,
+      postType: CommunityPostType.GENERAL,
+      body: "This week I keep thinking about how friendship changes when people start building things together. What line stayed with everyone else?",
+    },
+  });
+
+  const readingUpdatePost = await prisma.communityPost.create({
+    data: {
+      authorId: admin.id,
+      postType: CommunityPostType.READING_UPDATE,
+      relatedBookId: currentBook.id,
+      body: "I am through the midpoint and the creative partnership is getting thornier in the best way. Logging my progress before Sunday's check-in.",
+      isPinned: true,
+    },
+  });
+
+  const recommendationPost = await prisma.communityPost.create({
+    data: {
+      authorId: moderator.id,
+      postType: CommunityPostType.BOOK_RECOMMENDATION,
+      relatedBookId: backlogBook.id,
+      body: "Recommending this for a shorter speculative month. It has enough tenderness and structure to carry a very good discussion.",
+    },
+  });
+
+  const listeningPost = await prisma.communityPost.create({
+    data: {
+      authorId: member.id,
+      postType: CommunityPostType.CURRENTLY_LISTENING,
+      body: "Pairing this episode with the current read because it keeps circling memory, art, and what collaboration asks from people.",
+      listeningTitle: "Heavyweight",
+      listeningCreator: "Gimlet",
+      listeningUrl: "https://gimletmedia.com/shows/heavyweight",
+    },
+  });
+
+  const firstComment = await prisma.postComment.create({
+    data: {
+      postId: generalPost.id,
+      authorId: moderator.id,
+      body: "The bit about ambition feeling generous and selfish at the same time. I marked it twice.",
+    },
+  });
+
+  await prisma.postComment.create({
+    data: {
+      postId: generalPost.id,
+      authorId: member.id,
+      parentCommentId: firstComment.id,
+      body: "Same. It made the studio scenes feel much less tidy.",
+    },
+  });
+
+  await prisma.postComment.create({
+    data: {
+      postId: recommendationPost.id,
+      authorId: memberTwo.id,
+      body: "I would absolutely read this next. It sounds like a good bridge after the current book.",
+    },
+  });
+
+  await prisma.postReaction.createMany({
+    data: [
+      {
+        postId: generalPost.id,
+        userId: admin.id,
+        reactionType: PostReactionType.MADE_ME_THINK,
+      },
+      {
+        postId: generalPost.id,
+        userId: moderator.id,
+        reactionType: PostReactionType.INSIGHTFUL,
+      },
+      {
+        postId: readingUpdatePost.id,
+        userId: member.id,
+        reactionType: PostReactionType.I_AGREE,
+      },
+      {
+        postId: recommendationPost.id,
+        userId: memberTwo.id,
+        reactionType: PostReactionType.ADDING_TO_MY_LIST,
+      },
+      {
+        postId: listeningPost.id,
+        userId: admin.id,
+        reactionType: PostReactionType.APPLAUSE,
+      },
+    ],
+  });
+
+  await prisma.postBookmark.create({
+    data: {
+      postId: recommendationPost.id,
+      userId: member.id,
+    },
   });
 
   console.log("Seed complete.");

@@ -4,6 +4,7 @@ import {
   PollStatus,
 } from "@prisma/client";
 
+import { getRecentCommunityPosts } from "@/features/community/queries";
 import { getClubSettings } from "@/lib/club";
 import { db } from "@/lib/db";
 import { getProgressState } from "@/lib/progress";
@@ -14,7 +15,7 @@ export async function getClubShellData() {
 }
 
 export async function getDashboardData(userId: string) {
-  const [club, viewerMembership, memberCount, currentBook, nextMeeting, activePlan, recentAnnouncements, openPollCount] =
+  const [club, viewerMembership, memberCount, currentBook, nextMeeting, activePlan, recentAnnouncements, openPollCount, recentCommunityPosts] =
     await Promise.all([
       getClubSettings(),
       getMembershipForUser(userId),
@@ -84,6 +85,7 @@ export async function getDashboardData(userId: string) {
           },
         },
       }),
+      getRecentCommunityPosts(),
     ]);
 
   const progressSummary =
@@ -125,6 +127,7 @@ export async function getDashboardData(userId: string) {
     activePlan,
     recentAnnouncements,
     openPollCount,
+    recentCommunityPosts,
     progressSummary,
   };
 }

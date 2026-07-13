@@ -10,6 +10,7 @@ import {
   MapPin,
   Megaphone,
   Menu,
+  MessageCircle,
   Settings,
   Shield,
   UserRound,
@@ -43,6 +44,7 @@ type AppShellProps = {
 
 const navItems = [
   { href: "/dashboard", label: "Home", icon: House },
+  { href: "/community", label: "Community", icon: MessageCircle },
   { href: "/books", label: "Books", icon: BookOpenText },
   { href: "/reading-plan", label: "Reading Plan", icon: BookOpenText },
   { href: "/meetings", label: "Meetings", icon: CalendarDays },

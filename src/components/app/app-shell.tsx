@@ -12,6 +12,7 @@ import {
   Menu,
   Settings,
   Shield,
+  UserRound,
   Users,
   Vote,
   X,
@@ -48,6 +49,7 @@ const navItems = [
   { href: "/voting", label: "Voting", icon: Vote },
   { href: "/announcements", label: "Announcements", icon: Megaphone },
   { href: "/members", label: "Members", icon: Users },
+  { href: "/profile", label: "My Profile", icon: UserRound },
   { href: "/admin", label: "Admin", icon: Shield },
 ];
 

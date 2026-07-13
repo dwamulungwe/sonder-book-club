@@ -73,6 +73,7 @@ async function main() {
   await prisma.membershipPayment.deleteMany();
   await prisma.book.deleteMany();
   await prisma.membership.deleteMany();
+  await prisma.memberProfile.deleteMany();
   await prisma.clubSettings.deleteMany();
   await prisma.session.deleteMany();
   await prisma.account.deleteMany();
@@ -122,11 +123,93 @@ async function main() {
     role: SystemRole.MEMBER,
   });
 
-  await createUserWithMembership({
+  const guest = await createUserWithMembership({
     name: "Mwila Banda",
     email: "guest@bookclub.dev",
     passwordHash: sharedPassword,
     role: SystemRole.GUEST,
+  });
+
+  await prisma.memberProfile.createMany({
+    data: [
+      {
+        userId: admin.id,
+        bio: "Founder of the Sonder reading room, drawn to books that make people linger after the last page.",
+        phoneNumber: "+260 97 555 0142",
+        location: "Lusaka",
+        occupation: "Product strategist",
+        profileImageUrl:
+          "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80",
+        favouriteGenres: ["Literary fiction", "African literature", "Memoir"],
+        favouriteBooks: "Homegoing, Open City, The Memory of Love",
+        readingInterests:
+          "Memory, friendship, cities, and the quiet architecture of belonging.",
+        currentlyReadingText: "Tomorrow, and Tomorrow, and Tomorrow",
+        currentlyListeningTitle: "The Moth",
+        currentlyListeningCreator: "The Moth Podcast",
+        currentlyListeningUrl: "https://themoth.org/podcast",
+      },
+      {
+        userId: moderator.id,
+        bio: "Keeps discussions generous, precise, and a little mischievous when the room gets too quiet.",
+        phoneNumber: "+260 96 555 0188",
+        location: "Kabulonga",
+        occupation: "Literature teacher",
+        profileImageUrl:
+          "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80",
+        favouriteGenres: ["Speculative fiction", "Poetry", "Short stories"],
+        favouriteBooks: "Beloved, The Left Hand of Darkness, A Mercy",
+        readingInterests:
+          "Worldbuilding, voice, feminist classics, and books that reward rereading.",
+        currentlyReadingText: "Sea of Tranquility",
+        currentlyListeningTitle: "On Being",
+        currentlyListeningCreator: "Krista Tippett",
+        currentlyListeningUrl: "https://onbeing.org/series/podcast/",
+      },
+      {
+        userId: member.id,
+        bio: "A steady highlighter of strange sentences and an enthusiastic recommender of short novels.",
+        phoneNumber: "+260 95 555 0131",
+        location: "Roma",
+        occupation: "Architect",
+        favouriteGenres: ["Science fiction", "Novellas", "Essays"],
+        favouriteBooks: "The Dispossessed, Small Things Like These, Braiding Sweetgrass",
+        readingInterests:
+          "Climate, design, friendship, and books with careful structures.",
+        currentlyReadingText: "The Left Hand of Darkness",
+        currentlyListeningTitle: "Heavyweight",
+        currentlyListeningCreator: "Gimlet",
+        currentlyListeningUrl: "https://gimletmedia.com/shows/heavyweight",
+      },
+      {
+        userId: memberTwo.id,
+        bio: "Usually arrives with a passage marked, a playlist queued, and a question that opens the room.",
+        phoneNumber: "+260 97 555 0194",
+        location: "Woodlands",
+        occupation: "Brand designer",
+        profileImageUrl:
+          "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=600&q=80",
+        favouriteGenres: ["Historical fiction", "Contemporary romance", "Food writing"],
+        favouriteBooks: "Hamnet, The Vanishing Half, Like Water for Chocolate",
+        readingInterests:
+          "Family stories, sensory writing, migration, and books with memorable meals.",
+        currentlyReadingText: "Tomorrow, and Tomorrow, and Tomorrow",
+        currentlyListeningTitle: "Song Exploder",
+        currentlyListeningCreator: "Hrishikesh Hirway",
+        currentlyListeningUrl: "https://songexploder.net/",
+      },
+      {
+        userId: guest.id,
+        bio: "New to the circle and browsing the shelves before joining the next live discussion.",
+        location: "Longacres",
+        occupation: "Graduate student",
+        favouriteGenres: ["Mystery", "African literature"],
+        favouriteBooks: "The Shadow King, My Sister, the Serial Killer",
+        readingInterests:
+          "Sharp plots, contemporary African writing, and books that move quickly.",
+        currentlyReadingText: "My Sister, the Serial Killer",
+      },
+    ],
   });
 
   const currentBook = await prisma.book.create({

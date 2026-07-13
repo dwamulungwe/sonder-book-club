@@ -305,7 +305,11 @@ export async function getMembersPageData(userId: string) {
     getMembershipForUser(userId),
     db.membership.findMany({
       include: {
-        user: true,
+        user: {
+          include: {
+            profile: true,
+          },
+        },
       },
       orderBy: [
         { role: "asc" },
@@ -318,6 +322,26 @@ export async function getMembersPageData(userId: string) {
     club,
     viewerMembership,
     memberships,
+  };
+}
+
+export async function getProfilePageData(userId: string) {
+  const [club, profileUser] = await Promise.all([
+    getClubSettings(),
+    db.user.findUnique({
+      where: {
+        id: userId,
+      },
+      include: {
+        membership: true,
+        profile: true,
+      },
+    }),
+  ]);
+
+  return {
+    club,
+    profileUser,
   };
 }
 

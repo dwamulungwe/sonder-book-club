@@ -1,10 +1,15 @@
 import {
   AttendanceStatus,
+  BillingInterval,
   BookStatus,
+  InvoiceStatus,
   MembershipApplicationStatus,
   MembershipStatus,
+  PaymentMethod,
+  PaymentStatus,
   PollStatus,
   RsvpStatus,
+  SubscriptionStatus,
   SystemRole,
   TargetMode,
 } from "@prisma/client";
@@ -58,4 +63,28 @@ export function formatAttendanceStatus(status: AttendanceStatus) {
 
 export function formatPollStatus(status: PollStatus) {
   return status.toLowerCase();
+}
+
+export function formatBillingInterval(interval: BillingInterval) {
+  return interval.toLowerCase().replaceAll("_", " ");
+}
+
+export function formatSubscriptionStatus(status: SubscriptionStatus) {
+  return status.toLowerCase().replaceAll("_", " ");
+}
+
+export function formatInvoiceStatus(status: InvoiceStatus) {
+  return status.toLowerCase().replaceAll("_", " ");
+}
+
+export function formatPaymentStatus(status: PaymentStatus) {
+  if (status === PaymentStatus.PAID) {
+    return "confirmed";
+  }
+
+  return status.toLowerCase().replaceAll("_", " ");
+}
+
+export function formatPaymentMethod(method: PaymentMethod | null | undefined) {
+  return method ? method.toLowerCase().replaceAll("_", " ") : "not recorded";
 }

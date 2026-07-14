@@ -3,16 +3,21 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 import {
   AttendanceStatus,
+  BillingInterval,
   BookStatus,
   CommunityPostType,
   EmailOutboxStatus,
+  InvoiceStatus,
   MembershipApplicationStatus,
   MembershipStatus,
   NotificationType,
+  PaymentMethod,
+  PaymentStatus,
   PollStatus,
   PostReactionType,
   PrismaClient,
   RsvpStatus,
+  SubscriptionStatus,
   SystemRole,
   TargetMode,
 } from "@prisma/client";
@@ -87,6 +92,9 @@ async function main() {
   await prisma.readingPlan.deleteMany();
   await prisma.announcement.deleteMany();
   await prisma.membershipPayment.deleteMany();
+  await prisma.membershipInvoice.deleteMany();
+  await prisma.memberSubscription.deleteMany();
+  await prisma.membershipPlan.deleteMany();
   await prisma.book.deleteMany();
   await prisma.membership.deleteMany();
   await prisma.memberProfile.deleteMany();
@@ -189,6 +197,232 @@ async function main() {
     data: {
       emailAnnouncements: true,
     },
+  });
+
+  const adminMembership = await prisma.membership.findUniqueOrThrow({
+    where: {
+      userId: admin.id,
+    },
+  });
+  const memberMembership = await prisma.membership.findUniqueOrThrow({
+    where: {
+      userId: member.id,
+    },
+  });
+  const memberTwoMembership = await prisma.membership.findUniqueOrThrow({
+    where: {
+      userId: memberTwo.id,
+    },
+  });
+
+  const monthlyPlan = await prisma.membershipPlan.create({
+    data: {
+      name: "Monthly membership",
+      description: "Standard monthly Sonder membership dues.",
+      amountMinor: BigInt(25000),
+      currency: "ZMW",
+      billingInterval: BillingInterval.MONTHLY,
+      intervalCount: 1,
+      isActive: true,
+      isDefault: true,
+      createdById: admin.id,
+    },
+  });
+
+  await prisma.membershipPlan.create({
+    data: {
+      name: "Annual membership",
+      description: "Annual Sonder membership dues for members paying ahead.",
+      amountMinor: BigInt(270000),
+      currency: "ZMW",
+      billingInterval: BillingInterval.ANNUAL,
+      intervalCount: 1,
+      isActive: true,
+      isDefault: false,
+      createdById: admin.id,
+    },
+  });
+
+  await prisma.membershipPlan.create({
+    data: {
+      name: "Founding member historical",
+      description: "Inactive historical dues plan retained for billing history.",
+      amountMinor: BigInt(18000),
+      currency: "ZMW",
+      billingInterval: BillingInterval.MONTHLY,
+      intervalCount: 1,
+      isActive: false,
+      isDefault: false,
+      createdById: admin.id,
+    },
+  });
+
+  await prisma.memberSubscription.create({
+    data: {
+      membershipId: adminMembership.id,
+      planId: monthlyPlan.id,
+      status: SubscriptionStatus.ACTIVE,
+      startedAt: addDays(now, -35),
+      currentPeriodStart: addDays(now, -5),
+      currentPeriodEnd: addDays(now, 25),
+      nextBillingAt: addDays(now, 25),
+    },
+  });
+
+  const activeSubscription = await prisma.memberSubscription.create({
+    data: {
+      membershipId: memberMembership.id,
+      planId: monthlyPlan.id,
+      status: SubscriptionStatus.ACTIVE,
+      startedAt: addDays(now, -45),
+      currentPeriodStart: addDays(now, -15),
+      currentPeriodEnd: addDays(now, 15),
+      nextBillingAt: addDays(now, 15),
+    },
+  });
+
+  await prisma.memberSubscription.create({
+    data: {
+      membershipId: memberTwoMembership.id,
+      planId: monthlyPlan.id,
+      status: SubscriptionStatus.WAIVED,
+      startedAt: addDays(now, -40),
+      currentPeriodStart: addDays(now, -10),
+      currentPeriodEnd: addDays(now, 20),
+      nextBillingAt: null,
+      waiverReason: "Community scholarship for the current cycle.",
+    },
+  });
+
+  const openInvoice = await prisma.membershipInvoice.create({
+    data: {
+      membershipId: memberMembership.id,
+      subscriptionId: activeSubscription.id,
+      invoiceNumber: "INV-SEED-OPEN",
+      status: InvoiceStatus.OPEN,
+      description: "Monthly membership dues",
+      amountDueMinor: BigInt(25000),
+      amountPaidMinor: BigInt(0),
+      currency: "ZMW",
+      periodStart: activeSubscription.currentPeriodStart,
+      periodEnd: activeSubscription.currentPeriodEnd,
+      dueAt: addDays(now, 7),
+      createdById: admin.id,
+    },
+  });
+
+  const paidInvoice = await prisma.membershipInvoice.create({
+    data: {
+      membershipId: memberMembership.id,
+      subscriptionId: activeSubscription.id,
+      invoiceNumber: "INV-SEED-PAID",
+      status: InvoiceStatus.PAID,
+      description: "Previous monthly membership dues",
+      amountDueMinor: BigInt(25000),
+      amountPaidMinor: BigInt(25000),
+      currency: "ZMW",
+      periodStart: addDays(activeSubscription.currentPeriodStart, -30),
+      periodEnd: activeSubscription.currentPeriodStart,
+      dueAt: addDays(now, -20),
+      paidAt: addDays(now, -14),
+      createdById: admin.id,
+    },
+  });
+
+  const overdueInvoice = await prisma.membershipInvoice.create({
+    data: {
+      membershipId: memberMembership.id,
+      subscriptionId: activeSubscription.id,
+      invoiceNumber: "INV-SEED-OVERDUE",
+      status: InvoiceStatus.OVERDUE,
+      description: "Older monthly membership dues",
+      amountDueMinor: BigInt(25000),
+      amountPaidMinor: BigInt(5000),
+      currency: "ZMW",
+      periodStart: addDays(activeSubscription.currentPeriodStart, -60),
+      periodEnd: addDays(activeSubscription.currentPeriodStart, -30),
+      dueAt: addDays(now, -35),
+      createdById: admin.id,
+    },
+  });
+
+  await prisma.membershipPayment.createMany({
+    data: [
+      {
+        membershipId: memberMembership.id,
+        invoiceId: openInvoice.id,
+        amountMinor: BigInt(25000),
+        currency: "ZMW",
+        status: PaymentStatus.PENDING,
+        method: PaymentMethod.BANK_TRANSFER,
+        externalReference: "BANK-SEED-PENDING",
+        internalReference: "PAY-SEED-PENDING",
+        dueAt: openInvoice.dueAt,
+        paidAt: addDays(now, -1),
+        periodStart: openInvoice.periodStart,
+        periodEnd: openInvoice.periodEnd,
+        notes: "Awaiting bank statement verification.",
+        recordedById: admin.id,
+        idempotencyKey: "seed:payment:pending",
+      },
+      {
+        membershipId: memberMembership.id,
+        invoiceId: paidInvoice.id,
+        amountMinor: BigInt(15000),
+        currency: "ZMW",
+        status: PaymentStatus.CONFIRMED,
+        method: PaymentMethod.CASH,
+        externalReference: "CASH-SEED-001",
+        internalReference: "PAY-SEED-CASH",
+        dueAt: paidInvoice.dueAt,
+        paidAt: addDays(now, -15),
+        confirmedAt: addDays(now, -14),
+        confirmedById: admin.id,
+        periodStart: paidInvoice.periodStart,
+        periodEnd: paidInvoice.periodEnd,
+        notes: "Cash received at meeting.",
+        recordedById: admin.id,
+        idempotencyKey: "seed:payment:cash",
+      },
+      {
+        membershipId: memberMembership.id,
+        invoiceId: paidInvoice.id,
+        amountMinor: BigInt(10000),
+        currency: "ZMW",
+        status: PaymentStatus.CONFIRMED,
+        method: PaymentMethod.MOBILE_MONEY,
+        externalReference: "MM-SEED-001",
+        internalReference: "PAY-SEED-MOBILE",
+        dueAt: paidInvoice.dueAt,
+        paidAt: addDays(now, -14),
+        confirmedAt: addDays(now, -14),
+        confirmedById: admin.id,
+        periodStart: paidInvoice.periodStart,
+        periodEnd: paidInvoice.periodEnd,
+        notes: "Mobile-money confirmation reviewed.",
+        recordedById: admin.id,
+        idempotencyKey: "seed:payment:mobile",
+      },
+      {
+        membershipId: memberMembership.id,
+        invoiceId: overdueInvoice.id,
+        amountMinor: BigInt(5000),
+        currency: "ZMW",
+        status: PaymentStatus.CONFIRMED,
+        method: PaymentMethod.CASH,
+        externalReference: "CASH-SEED-PARTIAL",
+        internalReference: "PAY-SEED-PARTIAL",
+        dueAt: overdueInvoice.dueAt,
+        paidAt: addDays(now, -28),
+        confirmedAt: addDays(now, -28),
+        confirmedById: admin.id,
+        periodStart: overdueInvoice.periodStart,
+        periodEnd: overdueInvoice.periodEnd,
+        notes: "Partial cash payment; balance remains overdue.",
+        recordedById: admin.id,
+        idempotencyKey: "seed:payment:partial",
+      },
+    ],
   });
 
   await prisma.memberProfile.createMany({

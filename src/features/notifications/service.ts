@@ -18,7 +18,8 @@ type NotificationPreferenceKind =
   | "application"
   | "community"
   | "announcement"
-  | "meeting";
+  | "meeting"
+  | "billing";
 
 type DeliveryPolicy = "optional" | "transactional" | "none";
 
@@ -38,10 +39,12 @@ type NotificationPreferenceSnapshot = {
   inAppCommunityActivity: boolean;
   inAppAnnouncements: boolean;
   inAppApplicationUpdates: boolean;
+  inAppBillingUpdates: boolean;
   emailCommunityActivity: boolean;
   emailAnnouncements: boolean;
   emailApplicationUpdates: boolean;
   emailMeetingUpdates: boolean;
+  emailBillingUpdates: boolean;
 };
 
 type NotificationEmailInput = {
@@ -72,10 +75,12 @@ const DEFAULT_PREFERENCES: NotificationPreferenceSnapshot = {
   inAppCommunityActivity: true,
   inAppAnnouncements: true,
   inAppApplicationUpdates: true,
+  inAppBillingUpdates: true,
   emailCommunityActivity: false,
   emailAnnouncements: false,
   emailApplicationUpdates: true,
   emailMeetingUpdates: false,
+  emailBillingUpdates: true,
 };
 
 function keyPart(value: string | null | undefined) {
@@ -137,6 +142,10 @@ function shouldCreateInApp(
     return preference.inAppAnnouncements;
   }
 
+  if (kind === "billing") {
+    return preference.inAppBillingUpdates;
+  }
+
   return true;
 }
 
@@ -163,6 +172,10 @@ function shouldQueueEmail(
 
   if (kind === "announcement") {
     return preference.emailAnnouncements;
+  }
+
+  if (kind === "billing") {
+    return preference.emailBillingUpdates;
   }
 
   return preference.emailMeetingUpdates;
@@ -740,4 +753,278 @@ export async function notifyActiveMembersForMeetingUpdate(
         },
       })),
   );
+}
+
+export async function notifyInvoiceCreated(
+  tx: Prisma.TransactionClient,
+  input: {
+    invoiceId: string;
+    invoiceNumber: string;
+    recipient: RecipientSnapshot;
+    amountFormatted: string;
+  },
+) {
+  const href = "/membership/billing";
+
+  return createNotification(tx, {
+    recipient: input.recipient,
+    type: NotificationType.INVOICE_CREATED,
+    title: "Invoice created",
+    message: `A membership invoice for ${input.amountFormatted} is ready.`,
+    href,
+    entityType: "membership_invoice",
+    entityId: input.invoiceId,
+    dedupeKey: notificationDedupeKey(
+      "notification",
+      "invoice_created",
+      input.invoiceId,
+      input.recipient.id,
+    ),
+    preference: "billing",
+    inAppDelivery: "transactional",
+    email: {
+      templateKey: "invoice_created",
+      data: {
+        billingHref: href,
+        invoiceNumber: input.invoiceNumber,
+        amountFormatted: input.amountFormatted,
+      },
+      dedupeKey: notificationDedupeKey(
+        "email",
+        "invoice_created",
+        input.invoiceId,
+        input.recipient.id,
+      ),
+      delivery: "transactional",
+    },
+  });
+}
+
+export async function notifyPaymentRecorded(
+  tx: Prisma.TransactionClient,
+  input: {
+    paymentId: string;
+    recipient: RecipientSnapshot;
+    amountFormatted: string;
+    invoiceNumber?: string | null;
+    paymentReference: string;
+  },
+) {
+  const href = "/membership/billing";
+
+  return createNotification(tx, {
+    recipient: input.recipient,
+    type: NotificationType.PAYMENT_RECORDED,
+    title: "Payment recorded",
+    message: `A ${input.amountFormatted} membership payment was recorded and is awaiting confirmation.`,
+    href,
+    entityType: "membership_payment",
+    entityId: input.paymentId,
+    dedupeKey: notificationDedupeKey(
+      "notification",
+      "payment_recorded",
+      input.paymentId,
+      input.recipient.id,
+    ),
+    preference: "billing",
+    inAppDelivery: "transactional",
+    email: {
+      templateKey: "payment_recorded",
+      data: {
+        billingHref: href,
+        invoiceNumber: input.invoiceNumber,
+        amountFormatted: input.amountFormatted,
+        paymentReference: input.paymentReference,
+      },
+      dedupeKey: notificationDedupeKey(
+        "email",
+        "payment_recorded",
+        input.paymentId,
+        input.recipient.id,
+      ),
+      delivery: "transactional",
+    },
+  });
+}
+
+export async function notifyPaymentConfirmed(
+  tx: Prisma.TransactionClient,
+  input: {
+    paymentId: string;
+    recipient: RecipientSnapshot;
+    actorId?: string | null;
+    amountFormatted: string;
+    invoiceNumber?: string | null;
+    paymentReference: string;
+  },
+) {
+  const href = "/membership/billing";
+
+  return createNotification(tx, {
+    recipient: input.recipient,
+    actorId: input.actorId,
+    type: NotificationType.PAYMENT_CONFIRMED,
+    title: "Payment confirmed",
+    message: `Your ${input.amountFormatted} membership payment has been confirmed.`,
+    href,
+    entityType: "membership_payment",
+    entityId: input.paymentId,
+    dedupeKey: notificationDedupeKey(
+      "notification",
+      "payment_confirmed",
+      input.paymentId,
+      input.recipient.id,
+    ),
+    preference: "billing",
+    inAppDelivery: "transactional",
+    email: {
+      templateKey: "payment_confirmed",
+      data: {
+        billingHref: href,
+        invoiceNumber: input.invoiceNumber,
+        amountFormatted: input.amountFormatted,
+        paymentReference: input.paymentReference,
+      },
+      dedupeKey: notificationDedupeKey(
+        "email",
+        "payment_confirmed",
+        input.paymentId,
+        input.recipient.id,
+      ),
+      delivery: "transactional",
+    },
+  });
+}
+
+export async function notifyPaymentFailed(
+  tx: Prisma.TransactionClient,
+  input: {
+    paymentId: string;
+    recipient: RecipientSnapshot;
+    actorId?: string | null;
+    amountFormatted: string;
+    invoiceNumber?: string | null;
+  },
+) {
+  const href = "/membership/billing";
+
+  return createNotification(tx, {
+    recipient: input.recipient,
+    actorId: input.actorId,
+    type: NotificationType.PAYMENT_FAILED,
+    title: "Payment could not be confirmed",
+    message: `A ${input.amountFormatted} membership payment could not be confirmed.`,
+    href,
+    entityType: "membership_payment",
+    entityId: input.paymentId,
+    dedupeKey: notificationDedupeKey(
+      "notification",
+      "payment_failed",
+      input.paymentId,
+      input.recipient.id,
+    ),
+    preference: "billing",
+    inAppDelivery: "transactional",
+    email: {
+      templateKey: "payment_failed",
+      data: {
+        billingHref: href,
+        invoiceNumber: input.invoiceNumber,
+        amountFormatted: input.amountFormatted,
+      },
+      dedupeKey: notificationDedupeKey(
+        "email",
+        "payment_failed",
+        input.paymentId,
+        input.recipient.id,
+      ),
+      delivery: "transactional",
+    },
+  });
+}
+
+export async function notifySubscriptionPastDue(
+  tx: Prisma.TransactionClient,
+  input: {
+    subscriptionId: string;
+    recipient: RecipientSnapshot;
+  },
+) {
+  const href = "/membership/billing";
+
+  return createNotification(tx, {
+    recipient: input.recipient,
+    type: NotificationType.SUBSCRIPTION_PAST_DUE,
+    title: "Subscription past due",
+    message: "Your Sonder membership has an overdue invoice.",
+    href,
+    entityType: "member_subscription",
+    entityId: input.subscriptionId,
+    dedupeKey: notificationDedupeKey(
+      "notification",
+      "subscription_past_due",
+      input.subscriptionId,
+      input.recipient.id,
+    ),
+    preference: "billing",
+    inAppDelivery: "transactional",
+    email: {
+      templateKey: "subscription_past_due",
+      data: {
+        billingHref: href,
+      },
+      dedupeKey: notificationDedupeKey(
+        "email",
+        "subscription_past_due",
+        input.subscriptionId,
+        input.recipient.id,
+      ),
+      delivery: "transactional",
+    },
+  });
+}
+
+export async function notifySubscriptionWaived(
+  tx: Prisma.TransactionClient,
+  input: {
+    subscriptionId: string;
+    recipient: RecipientSnapshot;
+    actorId?: string | null;
+    planName: string;
+  },
+) {
+  const href = "/membership/billing";
+
+  return createNotification(tx, {
+    recipient: input.recipient,
+    actorId: input.actorId,
+    type: NotificationType.SUBSCRIPTION_WAIVED,
+    title: "Subscription waived",
+    message: `Your ${input.planName} membership dues are waived.`,
+    href,
+    entityType: "member_subscription",
+    entityId: input.subscriptionId,
+    dedupeKey: notificationDedupeKey(
+      "notification",
+      "subscription_waived",
+      input.subscriptionId,
+      input.recipient.id,
+    ),
+    preference: "billing",
+    inAppDelivery: "transactional",
+    email: {
+      templateKey: "subscription_waived",
+      data: {
+        billingHref: href,
+        planName: input.planName,
+      },
+      dedupeKey: notificationDedupeKey(
+        "email",
+        "subscription_waived",
+        input.subscriptionId,
+        input.recipient.id,
+      ),
+      delivery: "transactional",
+    },
+  });
 }

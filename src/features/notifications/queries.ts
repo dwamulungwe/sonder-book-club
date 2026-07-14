@@ -19,10 +19,12 @@ export const defaultNotificationPreferences = {
   inAppCommunityActivity: true,
   inAppAnnouncements: true,
   inAppApplicationUpdates: true,
+  inAppBillingUpdates: true,
   emailCommunityActivity: false,
   emailAnnouncements: false,
   emailApplicationUpdates: true,
   emailMeetingUpdates: false,
+  emailBillingUpdates: true,
 };
 
 export function formatUnreadCount(count: number) {

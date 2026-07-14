@@ -121,6 +121,12 @@ enum NotificationType {
   ANNOUNCEMENT_PUBLISHED
   MEETING_UPDATED
   NEW_MEMBER_WELCOME
+  INVOICE_CREATED
+  PAYMENT_RECORDED
+  PAYMENT_CONFIRMED
+  PAYMENT_FAILED
+  SUBSCRIPTION_PAST_DUE
+  SUBSCRIPTION_WAIVED
 }
 
 enum EmailOutboxStatus {
@@ -154,6 +160,8 @@ enum PaymentStatus {
   WAIVED
   FAILED
   REFUNDED
+  CONFIRMED
+  CANCELLED
 }
 
 enum PaymentMethod {
@@ -162,6 +170,31 @@ enum PaymentMethod {
   BANK_TRANSFER
   CARD
   OTHER
+}
+
+enum BillingInterval {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+  ONE_TIME
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  PAST_DUE
+  PAUSED
+  CANCELLED
+  WAIVED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  OPEN
+  PARTIALLY_PAID
+  PAID
+  VOID
+  OVERDUE
 }
 
 model User {
@@ -186,6 +219,9 @@ model User {
   createdPolls           Poll[]                  @relation("PollCreator")
   votes                  PollVote[]
   recordedPayments       MembershipPayment[]     @relation("PaymentRecorder")
+  confirmedPayments      MembershipPayment[]     @relation("PaymentConfirmer")
+  createdMembershipPlans MembershipPlan[]        @relation("MembershipPlanCreator")
+  createdInvoices        MembershipInvoice[]     @relation("InvoiceCreator")
   communityPosts         CommunityPost[]         @relation("CommunityPostAuthor")
   postComments           PostComment[]           @relation("PostCommentAuthor")
   postReactions          PostReaction[]
@@ -198,7 +234,7 @@ model User {
   receivedNotifications  Notification[]          @relation("NotificationRecipient")
   actedNotifications     Notification[]          @relation("NotificationActor")
   notificationPreference NotificationPreference?
-  emailOutboxItems       EmailOutbox[]            @relation("EmailOutboxRecipient")
+  emailOutboxItems       EmailOutbox[]           @relation("EmailOutboxRecipient")
   accounts               Account[]
   sessions               Session[]
   deletedAt              DateTime?
@@ -227,15 +263,17 @@ model ClubSettings {
 }
 
 model Membership {
-  id        String              @id @default(cuid())
-  userId    String              @unique
-  role      SystemRole          @default(MEMBER)
-  status    MembershipStatus    @default(ACTIVE)
-  joinedAt  DateTime            @default(now())
-  payments  MembershipPayment[]
-  createdAt DateTime            @default(now())
-  updatedAt DateTime            @updatedAt
-  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id            String               @id @default(cuid())
+  userId        String               @unique
+  role          SystemRole           @default(MEMBER)
+  status        MembershipStatus     @default(ACTIVE)
+  joinedAt      DateTime             @default(now())
+  payments      MembershipPayment[]
+  subscriptions MemberSubscription[]
+  invoices      MembershipInvoice[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([role, status])
@@ -551,10 +589,12 @@ model NotificationPreference {
   inAppCommunityActivity  Boolean  @default(true)
   inAppAnnouncements      Boolean  @default(true)
   inAppApplicationUpdates Boolean  @default(true)
+  inAppBillingUpdates     Boolean  @default(true)
   emailCommunityActivity  Boolean  @default(false)
   emailAnnouncements      Boolean  @default(false)
   emailApplicationUpdates Boolean  @default(true)
   emailMeetingUpdates     Boolean  @default(false)
+  emailBillingUpdates     Boolean  @default(true)
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
   user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -743,30 +783,117 @@ model PollVote {
 }
 
 model MembershipPayment {
-  id           String         @id @default(cuid())
-  membershipId String
-  amount       Decimal        @db.Decimal(10, 2)
-  currency     String         @db.VarChar(3)
-  status       PaymentStatus  @default(PENDING)
-  method       PaymentMethod?
-  reference    String?        @unique
-  dueAt        DateTime
-  paidAt       DateTime?
-  periodStart  DateTime?
-  periodEnd    DateTime?
-  notes        String?
-  recordedById String?
-  deletedAt    DateTime?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  membership   Membership     @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  recordedBy   User?          @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  id                String             @id @default(cuid())
+  membershipId      String
+  invoiceId         String?
+  amountMinor       BigInt
+  currency          String             @default("ZMW") @db.VarChar(3)
+  status            PaymentStatus      @default(PENDING)
+  method            PaymentMethod?
+  externalReference String?            @unique @map("reference")
+  internalReference String             @unique @db.VarChar(80)
+  dueAt             DateTime?
+  paidAt            DateTime?
+  confirmedAt       DateTime?
+  confirmedById     String?
+  periodStart       DateTime?
+  periodEnd         DateTime?
+  notes             String?
+  recordedById      String?
+  idempotencyKey    String?            @unique @db.VarChar(160)
+  deletedAt         DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  membership        Membership         @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  invoice           MembershipInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  recordedBy        User?              @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  confirmedBy       User?              @relation("PaymentConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
 
   @@unique([membershipId, periodStart, periodEnd])
   @@index([membershipId, status])
+  @@index([invoiceId, status])
   @@index([dueAt, status])
+  @@index([confirmedAt])
   @@index([deletedAt])
   @@map("membership_payments")
+}
+
+model MembershipPlan {
+  id              String               @id @default(cuid())
+  name            String               @db.VarChar(120)
+  description     String?              @db.VarChar(500)
+  amountMinor     BigInt
+  currency        String               @default("ZMW") @db.VarChar(3)
+  billingInterval BillingInterval
+  intervalCount   Int                  @default(1)
+  isActive        Boolean              @default(true)
+  isDefault       Boolean              @default(false)
+  createdById     String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  createdBy       User?                @relation("MembershipPlanCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  subscriptions   MemberSubscription[]
+
+  @@index([isActive, isDefault])
+  @@index([billingInterval])
+  @@index([createdById])
+  @@map("membership_plans")
+}
+
+model MemberSubscription {
+  id                 String              @id @default(cuid())
+  membershipId       String
+  planId             String
+  status             SubscriptionStatus  @default(PENDING)
+  startedAt          DateTime            @default(now())
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  nextBillingAt      DateTime?
+  cancelledAt        DateTime?
+  pausedAt           DateTime?
+  waiverReason       String?             @db.VarChar(500)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  membership         Membership          @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  plan               MembershipPlan      @relation(fields: [planId], references: [id], onDelete: Restrict)
+  invoices           MembershipInvoice[]
+
+  @@index([membershipId, status])
+  @@index([planId, status])
+  @@index([nextBillingAt])
+  @@index([currentPeriodEnd])
+  @@map("member_subscriptions")
+}
+
+model MembershipInvoice {
+  id              String              @id @default(cuid())
+  membershipId    String
+  subscriptionId  String?
+  invoiceNumber   String              @unique @db.VarChar(40)
+  status          InvoiceStatus       @default(OPEN)
+  description     String              @db.VarChar(240)
+  amountDueMinor  BigInt
+  amountPaidMinor BigInt              @default(0)
+  currency        String              @default("ZMW") @db.VarChar(3)
+  periodStart     DateTime?
+  periodEnd       DateTime?
+  dueAt           DateTime
+  paidAt          DateTime?
+  voidedAt        DateTime?
+  createdById     String?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  membership      Membership          @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  subscription    MemberSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  createdBy       User?               @relation("InvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  payments        MembershipPayment[]
+
+  @@index([membershipId, status])
+  @@index([status, dueAt])
+  @@index([dueAt])
+  @@index([subscriptionId, periodStart, periodEnd])
+  @@index([createdById])
+  @@map("membership_invoices")
 }
 
 model Account {

@@ -97,6 +97,14 @@ export default async function NotificationSettingsPage() {
               defaultChecked
               disabled
             />
+            <ToggleRow
+              id="in-app-billing"
+              name="inAppBillingUpdatesLocked"
+              title="Billing"
+              description="Invoices, payment confirmations, and billing-status updates stay enabled."
+              defaultChecked={preferences.inAppBillingUpdates}
+              disabled
+            />
           </div>
         </section>
 
@@ -133,6 +141,14 @@ export default async function NotificationSettingsPage() {
               title="Application status"
               description="Application decisions are transactional and remain enabled."
               defaultChecked
+              disabled
+            />
+            <ToggleRow
+              id="email-billing"
+              name="emailBillingUpdatesLocked"
+              title="Billing"
+              description="Billing email jobs are transactional and remain enabled."
+              defaultChecked={preferences.emailBillingUpdates}
               disabled
             />
           </div>

@@ -153,6 +153,42 @@ Capabilities:
 
 The payment layer must be provider-independent so Sonder is not tightly coupled to one gateway.
 
+Implementation note for v0.3 Change Set 6:
+
+- money is stored as integer minor units with ISO currency codes
+- manual/offline membership payments are operational
+- live online payments, provider webhooks, and checkout are not enabled yet
+- Flutterwave is the selected future online payment provider, but the billing
+  architecture remains provider-independent
+- the disabled payment provider remains the only implementation; no Flutterwave
+  SDK, API calls, credentials, public webhook endpoint, or functional Pay Online
+  button are added in this change set
+- the future provider flow must create a hosted checkout session, return a
+  checkout URL, store Sonder's trusted transaction reference, store the provider
+  transaction ID, support server-side transaction verification, handle
+  asynchronous mobile-money states, validate signed webhook events, check status
+  after webhook/user-return events, process refunds through an explicit workflow,
+  and reconcile provider transactions against Sonder invoices
+- a future Flutterwave adapter must map Sonder's server-generated transaction
+  reference to Flutterwave's `tx_ref`/reference, keep Flutterwave transaction IDs
+  and processor references separate, and avoid coupling invoices, subscriptions,
+  or payment records to Flutterwave-specific types
+- an invoice may only be settled after trusted server-side verification confirms
+  successful provider status, matching Sonder transaction reference, matching
+  invoice, matching amount, matching currency, a transaction not previously
+  processed, and a payment not already allocated
+- browser-return parameters or a success page are never proof of payment;
+  Flutterwave webhooks can be delivered more than once, webhook processing must
+  be idempotent, mobile-money payments can complete asynchronously, and payment
+  confirmation must happen inside a database transaction
+- Flutterwave credentials must never be exposed to the browser; Sonder must not
+  store card details, mobile-money PINs, provider access tokens, secret keys, or
+  raw sensitive provider payloads, and provider errors/payloads must be sanitised
+  before logging
+- email jobs can be queued for billing events, but delivery remains provider-disabled
+- invoice generation exists as explicit service logic and is not scheduled
+- full accounting remains separate from membership billing
+
 ### 4.4 Book-club accounting
 
 Add a finance module suitable for the club's day-to-day financial management.

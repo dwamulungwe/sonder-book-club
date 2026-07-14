@@ -109,6 +109,28 @@ enum MembershipApplicationStatus {
   WAITLISTED
 }
 
+enum NotificationType {
+  APPLICATION_SUBMITTED
+  APPLICATION_UNDER_REVIEW
+  APPLICATION_APPROVED
+  APPLICATION_REJECTED
+  APPLICATION_WAITLISTED
+  COMMUNITY_COMMENT
+  COMMUNITY_REPLY
+  COMMUNITY_REACTION
+  ANNOUNCEMENT_PUBLISHED
+  MEETING_UPDATED
+  NEW_MEMBER_WELCOME
+}
+
+enum EmailOutboxStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
 enum PostReactionType {
   INSIGHTFUL
   BEAUTIFULLY_SAID
@@ -173,6 +195,10 @@ model User {
   profile                MemberProfile?
   membershipApplications MembershipApplication[] @relation("MembershipApplicationApplicant")
   reviewedApplications   MembershipApplication[] @relation("MembershipApplicationReviewer")
+  receivedNotifications  Notification[]          @relation("NotificationRecipient")
+  actedNotifications     Notification[]          @relation("NotificationActor")
+  notificationPreference NotificationPreference?
+  emailOutboxItems       EmailOutbox[]            @relation("EmailOutboxRecipient")
   accounts               Account[]
   sessions               Session[]
   deletedAt              DateTime?
@@ -494,6 +520,73 @@ model MembershipApplication {
   @@index([applicantUserId, createdAt])
   @@index([reviewedById, reviewedAt])
   @@map("membership_applications")
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  recipientId String
+  actorId     String?
+  type        NotificationType
+  title       String           @db.VarChar(160)
+  message     String           @db.VarChar(500)
+  href        String?          @db.VarChar(500)
+  entityType  String?          @db.VarChar(80)
+  entityId    String?          @db.VarChar(120)
+  dedupeKey   String?          @unique @db.VarChar(240)
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  recipient   User             @relation("NotificationRecipient", fields: [recipientId], references: [id], onDelete: Restrict)
+  actor       User?            @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId, readAt, createdAt])
+  @@index([recipientId, createdAt])
+  @@index([actorId, createdAt])
+  @@index([type, createdAt])
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  userId                  String   @id
+  inAppCommunityActivity  Boolean  @default(true)
+  inAppAnnouncements      Boolean  @default(true)
+  inAppApplicationUpdates Boolean  @default(true)
+  emailCommunityActivity  Boolean  @default(false)
+  emailAnnouncements      Boolean  @default(false)
+  emailApplicationUpdates Boolean  @default(true)
+  emailMeetingUpdates     Boolean  @default(false)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  user                    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+model EmailOutbox {
+  id                  String            @id @default(cuid())
+  recipientUserId     String?
+  toEmail             String            @db.VarChar(255)
+  templateKey         String            @db.VarChar(120)
+  subject             String            @db.VarChar(240)
+  payload             Json
+  status              EmailOutboxStatus @default(PENDING)
+  dedupeKey           String            @unique @db.VarChar(240)
+  attempts            Int               @default(0)
+  maxAttempts         Int               @default(5)
+  nextAttemptAt       DateTime?
+  processingStartedAt DateTime?
+  sentAt              DateTime?
+  providerMessageId   String?           @db.VarChar(255)
+  lastError           String?           @db.VarChar(1000)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  recipientUser       User?             @relation("EmailOutboxRecipient", fields: [recipientUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, nextAttemptAt])
+  @@index([status, createdAt])
+  @@index([createdAt])
+  @@index([recipientUserId, createdAt])
+  @@map("email_outbox")
 }
 
 model PostComment {

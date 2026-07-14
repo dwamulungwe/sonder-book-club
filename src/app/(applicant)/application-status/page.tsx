@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { Bell, Check } from "lucide-react";
 import { MembershipApplicationStatus, MembershipStatus } from "@prisma/client";
 
 import { BrandLogo } from "@/components/app/brand-logo";
@@ -7,9 +8,19 @@ import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
 import { getMyApplicationStatusData } from "@/features/applications/queries";
 import { logoutAction } from "@/features/auth/actions";
+import { markApplicationNotificationReadAction } from "@/features/notifications/actions";
+import {
+  APPLICATION_NOTIFICATION_LIMIT,
+  getApplicationStatusNotifications,
+  notificationTypeLabel,
+} from "@/features/notifications/queries";
 import { APP_LOGO_PATH, APP_NAME } from "@/lib/brand";
-import { formatMembershipApplicationStatus } from "@/lib/formatters";
+import {
+  formatDateTime,
+  formatMembershipApplicationStatus,
+} from "@/lib/formatters";
 import { requireSessionUser } from "@/lib/session";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Application Status",
@@ -57,6 +68,9 @@ export default async function ApplicationStatusPage() {
   const application = data.application;
   const isActiveMember =
     data.user?.membership?.status === MembershipStatus.ACTIVE;
+  const applicationNotifications = isActiveMember
+    ? []
+    : await getApplicationStatusNotifications(sessionUser.id);
   const status = application?.status;
   const copy = status ? statusCopy[status] : null;
 
@@ -105,6 +119,102 @@ export default async function ApplicationStatusPage() {
             </>
           )}
         </div>
+
+        {!isActiveMember ? (
+          <div className="mt-6 rounded-xl border border-stone-200 bg-white p-4">
+            <div className="flex items-start gap-3">
+              <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-full border border-amber-200 bg-amber-50 text-amber-900">
+                <Bell className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="text-lg font-semibold text-stone-950">
+                  Application updates
+                </h2>
+                <p className="mt-1 text-sm leading-6 text-stone-600">
+                  Showing up to {APPLICATION_NOTIFICATION_LIMIT} recent
+                  application-status notifications for this account.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-3">
+              {applicationNotifications.length > 0 ? (
+                applicationNotifications.map((notification) => {
+                  const isUnread = !notification.readAt;
+
+                  return (
+                    <article
+                      key={notification.id}
+                      className={cn(
+                        "rounded-xl border p-3",
+                        isUnread
+                          ? "border-amber-200 bg-amber-50/80"
+                          : "border-stone-200 bg-stone-50",
+                      )}
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-sm font-semibold text-stone-950">
+                              {notification.title}
+                            </p>
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-[0.7rem] font-semibold uppercase tracking-[0.12em]",
+                                isUnread
+                                  ? "bg-amber-100 text-amber-900"
+                                  : "bg-stone-200 text-stone-600",
+                              )}
+                            >
+                              {isUnread ? "Unread" : "Read"}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm leading-6 text-stone-700">
+                            {notification.message}
+                          </p>
+                          <p className="mt-1 text-xs capitalize text-stone-500">
+                            {notificationTypeLabel(notification.type)} -{" "}
+                            {formatDateTime(notification.createdAt)}
+                          </p>
+                        </div>
+                        {isUnread ? (
+                          <form action={markApplicationNotificationReadAction}>
+                            <input
+                              type="hidden"
+                              name="notificationId"
+                              value={notification.id}
+                            />
+                            <input
+                              type="hidden"
+                              name="redirectTo"
+                              value="/application-status"
+                            />
+                            <button
+                              type="submit"
+                              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-stone-900 px-3 py-2 text-sm font-medium text-stone-50 transition-colors hover:bg-stone-800"
+                            >
+                              <Check className="size-4" />
+                              Mark read
+                            </button>
+                          </form>
+                        ) : null}
+                      </div>
+                    </article>
+                  );
+                })
+              ) : (
+                <p className="rounded-xl border border-stone-200 bg-stone-50 p-3 text-sm leading-6 text-stone-600">
+                  Application updates from Sonder will appear here.
+                </p>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="mt-6 rounded-xl border border-stone-200 bg-white p-4 text-sm leading-6 text-stone-600">
+            You can now view all of your notifications from the member
+            workspace.
+          </div>
+        )}
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
           {status === MembershipApplicationStatus.APPROVED || isActiveMember ? (

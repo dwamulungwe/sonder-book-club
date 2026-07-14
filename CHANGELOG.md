@@ -6,6 +6,8 @@ All notable changes to Sonder Book Club are documented in this file.
 
 ### Changed
 
+- Added the v0.2 in-app notifications and provider-independent email outbox foundation with notification preferences, transactional application-status email jobs, community/announcement/meeting integrations, protected notification settings, and an ADMIN-only outbox review page.
+- Documented that no live email provider or scheduled delivery processor is configured yet; outbox records are not considered sent without provider confirmation.
 - Added the membership application and onboarding workflow with a public Join page, signed-in application status page, moderator/admin review queue, approval transactions, and idempotent community welcome posts.
 - Redirected the legacy public signup path to Join so public account creation no longer grants active membership.
 - Tightened member-facing navigation and member directory visibility so pending applicants are kept out of active member surfaces.
@@ -16,6 +18,7 @@ All notable changes to Sonder Book Club are documented in this file.
 
 ### Database
 
+- Added `20260714_notifications_email_outbox` to create notification and email outbox enums, notification records, user notification preferences, unique dedupe keys, audit-preserving relations, and indexes for unread/recent notification and outbox processing queries.
 - Added `20260714_membership_applications_onboarding` to create membership application statuses and records, add pending memberships, add new-member welcome posts, and protect unresolved application emails with a partial unique index.
 - Added `20260713_community_feed_foundation` to create community posts, comments, reactions, bookmarks, and content reports.
 - Added `20260713_member_profile_foundation` to create the one-to-one member profile table.

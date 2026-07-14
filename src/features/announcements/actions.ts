@@ -1,6 +1,7 @@
 "use server";
 
 import { announcementSchema } from "@/features/announcements/schemas";
+import { notifyActiveMembersForAnnouncement } from "@/features/notifications/service";
 import { db } from "@/lib/db";
 import { getString } from "@/lib/form-data";
 import { redirectWithNotice, resolveReturnPath } from "@/lib/navigation";
@@ -32,12 +33,24 @@ export async function createAnnouncementAction(formData: FormData) {
     );
   }
 
-  await db.announcement.create({
-    data: {
-      createdById: user.id,
+  await db.$transaction(async (tx) => {
+    const announcement = await tx.announcement.create({
+      data: {
+        createdById: user.id,
+        title: parsed.data.title,
+        body: parsed.data.body,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    await notifyActiveMembersForAnnouncement(tx, {
+      announcementId: announcement.id,
+      actorId: user.id,
       title: parsed.data.title,
       body: parsed.data.body,
-    },
+    });
   });
 
   redirectWithNotice(

@@ -5,8 +5,10 @@ import {
   AttendanceStatus,
   BookStatus,
   CommunityPostType,
+  EmailOutboxStatus,
   MembershipApplicationStatus,
   MembershipStatus,
+  NotificationType,
   PollStatus,
   PostReactionType,
   PrismaClient,
@@ -50,6 +52,9 @@ async function createUserWithMembership(input: {
           status: input.status ?? MembershipStatus.ACTIVE,
         },
       },
+      notificationPreference: {
+        create: {},
+      },
     },
   });
 }
@@ -62,6 +67,8 @@ async function main() {
   const lastWeek = addDays(now, -7);
 
   await prisma.contentReport.deleteMany();
+  await prisma.emailOutbox.deleteMany();
+  await prisma.notification.deleteMany();
   await prisma.membershipApplication.deleteMany();
   await prisma.postBookmark.deleteMany();
   await prisma.postReaction.deleteMany();
@@ -83,6 +90,7 @@ async function main() {
   await prisma.book.deleteMany();
   await prisma.membership.deleteMany();
   await prisma.memberProfile.deleteMany();
+  await prisma.notificationPreference.deleteMany();
   await prisma.clubSettings.deleteMany();
   await prisma.session.deleteMany();
   await prisma.account.deleteMany();
@@ -161,6 +169,26 @@ async function main() {
     passwordHash: sharedPassword,
     role: SystemRole.GUEST,
     status: MembershipStatus.PENDING,
+  });
+
+  await prisma.notificationPreference.update({
+    where: {
+      userId: member.id,
+    },
+    data: {
+      emailCommunityActivity: true,
+      emailAnnouncements: true,
+      emailMeetingUpdates: true,
+    },
+  });
+
+  await prisma.notificationPreference.update({
+    where: {
+      userId: memberTwo.id,
+    },
+    data: {
+      emailAnnouncements: true,
+    },
   });
 
   await prisma.memberProfile.createMany({
@@ -799,7 +827,7 @@ async function main() {
     },
   });
 
-  await prisma.postComment.create({
+  const replyComment = await prisma.postComment.create({
     data: {
       postId: generalPost.id,
       authorId: member.id,
@@ -808,7 +836,7 @@ async function main() {
     },
   });
 
-  await prisma.postComment.create({
+  const recommendationComment = await prisma.postComment.create({
     data: {
       postId: recommendationPost.id,
       authorId: memberTwo.id,
@@ -851,6 +879,122 @@ async function main() {
       postId: recommendationPost.id,
       userId: member.id,
     },
+  });
+
+  await prisma.notification.createMany({
+    data: [
+      {
+        recipientId: member.id,
+        actorId: admin.id,
+        type: NotificationType.ANNOUNCEMENT_PUBLISHED,
+        title: "New announcement",
+        message: "New Sonder announcement: Bring your favorite quote",
+        href: "/announcements",
+        entityType: "announcement",
+        entityId: "seed-announcement-quote",
+        dedupeKey: "seed:notification:announcement:member",
+      },
+      {
+        recipientId: member.id,
+        actorId: moderator.id,
+        type: NotificationType.MEETING_UPDATED,
+        title: "Meeting update",
+        message: "There is a Sonder meeting update for Midpoint discussion.",
+        href: "/meetings",
+        entityType: "meeting",
+        entityId: upcomingMeeting.id,
+        dedupeKey: "seed:notification:meeting:member",
+        readAt: addDays(now, -1),
+      },
+      {
+        recipientId: reviewApplicant.id,
+        type: NotificationType.APPLICATION_UNDER_REVIEW,
+        title: "Application under review",
+        message: "Your Sonder application is now under review.",
+        href: "/application-status",
+        entityType: "membership_application",
+        entityId: "seed-application-under-review",
+        dedupeKey: "seed:notification:application:review",
+      },
+      {
+        recipientId: moderator.id,
+        actorId: member.id,
+        type: NotificationType.COMMUNITY_REPLY,
+        title: "New reply",
+        message: "Lukundo Phiri replied to your comment.",
+        href: "/community",
+        entityType: "post_comment",
+        entityId: replyComment.id,
+        dedupeKey: "seed:notification:community:reply",
+      },
+      {
+        recipientId: moderator.id,
+        actorId: memberTwo.id,
+        type: NotificationType.COMMUNITY_COMMENT,
+        title: "New comment",
+        message: "Chipo Mwanza commented on your community post.",
+        href: "/community",
+        entityType: "post_comment",
+        entityId: recommendationComment.id,
+        dedupeKey: "seed:notification:community:comment",
+      },
+    ],
+  });
+
+  await prisma.emailOutbox.createMany({
+    data: [
+      {
+        recipientUserId: submittedApplicant.id,
+        toEmail: submittedApplicant.email,
+        templateKey: "application_received",
+        subject: "Sonder received your application",
+        payload: {
+          textBody:
+            "Thank you for applying to join Sonder Book Club. You can check your status at /application-status.",
+          htmlBody:
+            "<p>Thank you for applying to join Sonder Book Club.</p><p>You can check your status at /application-status.</p>",
+          statusHref: "/application-status",
+        },
+        status: EmailOutboxStatus.PENDING,
+        dedupeKey: "seed:email:application:received",
+      },
+      {
+        recipientUserId: member.id,
+        toEmail: member.email,
+        templateKey: "announcement_published",
+        subject: "Sonder announcement: Reading plan update",
+        payload: {
+          textBody:
+            "A new Sonder announcement was published. Read it at /announcements.",
+          htmlBody:
+            "<p>A new Sonder announcement was published.</p><p>Read it at /announcements.</p>",
+          announcementHref: "/announcements",
+        },
+        status: EmailOutboxStatus.FAILED,
+        attempts: 5,
+        maxAttempts: 5,
+        lastError: "Development provider unavailable.",
+        dedupeKey: "seed:email:announcement:failed",
+      },
+      {
+        recipientUserId: memberTwo.id,
+        toEmail: memberTwo.email,
+        templateKey: "meeting_updated",
+        subject: "Sonder meeting update: Midpoint discussion",
+        payload: {
+          textBody:
+            "There is a meeting update for Midpoint discussion. Open /meetings.",
+          htmlBody:
+            "<p>There is a meeting update for Midpoint discussion.</p><p>Open /meetings.</p>",
+          meetingHref: "/meetings",
+        },
+        status: EmailOutboxStatus.SENT,
+        attempts: 1,
+        sentAt: addDays(now, -1),
+        providerMessageId: "dev-seed-message",
+        dedupeKey: "seed:email:meeting:sent",
+      },
+    ],
   });
 
   console.log("Seed complete.");

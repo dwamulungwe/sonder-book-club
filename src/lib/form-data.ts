@@ -8,6 +8,10 @@ export function getOptionalString(formData: FormData, field: string) {
   return value.length > 0 ? value : undefined;
 }
 
+export function getCheckbox(formData: FormData, field: string) {
+  return formData.get(field) === "on";
+}
+
 export function getInt(formData: FormData, field: string) {
   const value = getString(formData, field);
 

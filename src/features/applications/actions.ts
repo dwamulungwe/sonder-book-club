@@ -16,6 +16,10 @@ import {
   reviewNotesSchema,
   unresolvedApplicationStatuses,
 } from "@/features/applications/schemas";
+import {
+  notifyApplicationStatusChanged,
+  notifyApplicationSubmitted,
+} from "@/features/notifications/service";
 import { db } from "@/lib/db";
 import { getOptionalString, getString } from "@/lib/form-data";
 import {
@@ -193,13 +197,16 @@ export async function submitMembershipApplicationAction(formData: FormData) {
                 favouriteBooks: parsed.data.favouriteBooks,
               },
             },
+            notificationPreference: {
+              create: {},
+            },
           },
           select: {
             id: true,
           },
         });
 
-        await tx.membershipApplication.create({
+        const application = await tx.membershipApplication.create({
           data: {
             applicantUserId: user.id,
             fullName: parsed.data.fullName,
@@ -217,6 +224,18 @@ export async function submitMembershipApplicationAction(formData: FormData) {
             acceptedPrivacyPolicy: parsed.data.acceptedPrivacyPolicy,
             status: MembershipApplicationStatus.SUBMITTED,
             submittedAt: now,
+          },
+          select: {
+            id: true,
+          },
+        });
+
+        await notifyApplicationSubmitted(tx, {
+          applicationId: application.id,
+          recipient: {
+            id: user.id,
+            email: parsed.data.email,
+            name: parsed.data.fullName,
           },
         });
       },
@@ -351,6 +370,15 @@ async function transitionApplication(
             id: true,
             status: true,
             applicantUserId: true,
+            email: true,
+            fullName: true,
+            applicantUser: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+              },
+            },
           },
         });
 
@@ -404,6 +432,25 @@ async function transitionApplication(
           targetStatus === MembershipApplicationStatus.WAITLISTED
         ) {
           await preservePendingApplicantAccount(tx, application.applicantUserId);
+        }
+
+        if (application.applicantUser) {
+          const status =
+            targetStatus === MembershipApplicationStatus.UNDER_REVIEW
+              ? "under_review"
+              : targetStatus === MembershipApplicationStatus.REJECTED
+                ? "rejected"
+                : "waitlisted";
+
+          await notifyApplicationStatusChanged(tx, {
+            applicationId: application.id,
+            recipient: {
+              id: application.applicantUser.id,
+              email: application.applicantUser.email ?? application.email,
+              name: application.applicantUser.name ?? application.fullName,
+            },
+            status,
+          });
         }
       },
       {
@@ -664,6 +711,16 @@ export async function approveApplicationAction(formData: FormData) {
             },
           });
         }
+
+        await notifyApplicationStatusChanged(tx, {
+          applicationId: application.id,
+          recipient: {
+            id: applicant.id,
+            email: applicant.email,
+            name: applicant.name ?? application.fullName,
+          },
+          status: "approved",
+        });
       },
       {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,

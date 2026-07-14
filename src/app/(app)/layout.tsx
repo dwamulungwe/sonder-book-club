@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 
 import { AppShell } from "@/components/app/app-shell";
 import { getClubShellData } from "@/features/club/queries";
+import { getUnreadNotificationCount } from "@/features/notifications/queries";
 import { requireMembershipContext } from "@/lib/session";
 
 export default async function ProtectedLayout({
@@ -10,9 +11,10 @@ export default async function ProtectedLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const [{ user, membership }, club] = await Promise.all([
-    requireMembershipContext(),
+  const { user, membership } = await requireMembershipContext();
+  const [club, unreadNotificationCount] = await Promise.all([
     getClubShellData(),
+    getUnreadNotificationCount(user.id),
   ]);
 
   if (membership?.status !== MembershipStatus.ACTIVE) {
@@ -20,7 +22,11 @@ export default async function ProtectedLayout({
   }
 
   return (
-    <AppShell club={club} user={{ ...user, membership }}>
+    <AppShell
+      club={club}
+      user={{ ...user, membership }}
+      unreadNotificationCount={unreadNotificationCount}
+    >
       {children}
     </AppShell>
   );

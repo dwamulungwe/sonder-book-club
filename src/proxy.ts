@@ -13,7 +13,9 @@ const protectedPrefixes = [
   "/voting",
   "/announcements",
   "/members",
+  "/notifications",
   "/profile",
+  "/settings",
   "/application-status",
   "/admin",
 ];

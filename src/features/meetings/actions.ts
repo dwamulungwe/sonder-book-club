@@ -3,6 +3,7 @@
 import { AttendanceStatus, RsvpStatus } from "@prisma/client";
 
 import { meetingSchema } from "@/features/meetings/schemas";
+import { notifyActiveMembersForMeetingUpdate } from "@/features/notifications/service";
 import { combineDateAndTime } from "@/lib/date";
 import { db } from "@/lib/db";
 import { getOptionalString, getString } from "@/lib/form-data";
@@ -42,15 +43,31 @@ export async function createMeetingAction(formData: FormData) {
     );
   }
 
-  await db.meeting.create({
-    data: {
-      createdById: user.id,
+  const startsAt = combineDateAndTime(parsed.data.date, parsed.data.time);
+
+  await db.$transaction(async (tx) => {
+    const meeting = await tx.meeting.create({
+      data: {
+        createdById: user.id,
+        title: parsed.data.title,
+        agenda: parsed.data.agenda,
+        startsAt,
+        location: parsed.data.location,
+        meetingLink: parsed.data.meetingLink,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    await notifyActiveMembersForMeetingUpdate(tx, {
+      meetingId: meeting.id,
+      actorId: user.id,
       title: parsed.data.title,
-      agenda: parsed.data.agenda,
-      startsAt: combineDateAndTime(parsed.data.date, parsed.data.time),
+      startsAt,
       location: parsed.data.location,
-      meetingLink: parsed.data.meetingLink,
-    },
+      revisionKey: "created",
+    });
   });
 
   redirectWithNotice(

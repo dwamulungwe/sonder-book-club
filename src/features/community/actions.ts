@@ -13,6 +13,11 @@ import {
   reactionSchema,
   reportReviewSchema,
 } from "@/features/community/schemas";
+import {
+  notifyCommunityComment,
+  notifyCommunityReaction,
+  notifyCommunityReply,
+} from "@/features/notifications/service";
 import { db } from "@/lib/db";
 import { getOptionalString, getString } from "@/lib/form-data";
 import { redirectWithNotice, resolveReturnPath } from "@/lib/navigation";
@@ -238,6 +243,13 @@ export async function setPostPinnedAction(formData: FormData) {
     },
     select: {
       id: true,
+      author: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      },
     },
   });
 
@@ -281,6 +293,13 @@ export async function createPostCommentAction(formData: FormData) {
     },
     select: {
       id: true,
+      author: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      },
     },
   });
 
@@ -288,15 +307,36 @@ export async function createPostCommentAction(formData: FormData) {
     redirectWithNotice(redirectTo, "error", "Post not found.");
   }
 
+  let parentComment:
+    | {
+        id: string;
+        postId: string;
+        parentCommentId: string | null;
+        author: {
+          id: string;
+          email: string | null;
+          name: string | null;
+        };
+      }
+    | null = null;
+
   if (parentCommentId) {
-    const parentComment = await db.postComment.findFirst({
+    parentComment = await db.postComment.findFirst({
       where: {
         id: parentCommentId,
         deletedAt: null,
       },
       select: {
+        id: true,
         postId: true,
         parentCommentId: true,
+        author: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
       },
     });
 
@@ -313,13 +353,42 @@ export async function createPostCommentAction(formData: FormData) {
     }
   }
 
-  await db.postComment.create({
-    data: {
+  await db.$transaction(async (tx) => {
+    const comment = await tx.postComment.create({
+      data: {
+        postId,
+        parentCommentId,
+        authorId: user.id,
+        body: parsed.data.body,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (parentComment) {
+      await notifyCommunityReply(tx, {
+        postId,
+        commentId: comment.id,
+        parentCommentId: parentComment.id,
+        recipient: parentComment.author,
+        actor: {
+          id: user.id,
+          name: user.name,
+        },
+      });
+      return;
+    }
+
+    await notifyCommunityComment(tx, {
       postId,
-      parentCommentId,
-      authorId: user.id,
-      body: parsed.data.body,
-    },
+      commentId: comment.id,
+      recipient: post.author,
+      actor: {
+        id: user.id,
+        name: user.name,
+      },
+    });
   });
 
   redirectWithNotice(redirectTo, "success", "Comment added.");
@@ -437,6 +506,13 @@ export async function reactToPostAction(formData: FormData) {
     },
     select: {
       id: true,
+      author: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+        },
+      },
     },
   });
 
@@ -444,22 +520,33 @@ export async function reactToPostAction(formData: FormData) {
     redirectWithNotice(redirectTo, "error", "Post not found.");
   }
 
-  await db.postReaction.upsert({
-    where: {
-      postId_userId: {
+  await db.$transaction(async (tx) => {
+    await tx.postReaction.upsert({
+      where: {
+        postId_userId: {
+          postId,
+          userId: user.id,
+        },
+      },
+      update: {
+        reactionType: parsed.data.reactionType as PostReactionType,
+        createdAt: new Date(),
+      },
+      create: {
         postId,
         userId: user.id,
+        reactionType: parsed.data.reactionType as PostReactionType,
       },
-    },
-    update: {
-      reactionType: parsed.data.reactionType as PostReactionType,
-      createdAt: new Date(),
-    },
-    create: {
+    });
+
+    await notifyCommunityReaction(tx, {
       postId,
-      userId: user.id,
-      reactionType: parsed.data.reactionType as PostReactionType,
-    },
+      recipient: post.author,
+      actor: {
+        id: user.id,
+        name: user.name,
+      },
+    });
   });
 
   redirectWithNotice(redirectTo, "success", "Reaction updated.");

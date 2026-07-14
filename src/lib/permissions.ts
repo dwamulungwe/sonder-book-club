@@ -34,6 +34,20 @@ export function canManageClub(user: UserLike, membership: MembershipLike) {
   );
 }
 
+export function canAdministerEmailOutbox(
+  user: UserLike,
+  membership: MembershipLike,
+) {
+  if (!isActiveMembership(membership)) {
+    return false;
+  }
+
+  return (
+    membership?.role === SystemRole.ADMIN ||
+    user?.systemRole === SystemRole.ADMIN
+  );
+}
+
 export function canModerateClub(user: UserLike, membership: MembershipLike) {
   if (canManageClub(user, membership)) {
     return true;

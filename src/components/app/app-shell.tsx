@@ -4,10 +4,12 @@ import Link from "next/link";
 import { useState } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
+  Bell,
   BookOpenText,
   CalendarDays,
   ClipboardList,
   House,
+  Mail,
   MapPin,
   Megaphone,
   Menu,
@@ -44,6 +46,7 @@ type AppShellProps = {
       status: string;
     } | null;
   };
+  unreadNotificationCount?: number;
   children: React.ReactNode;
 };
 
@@ -61,7 +64,9 @@ const navItems: {
   { href: "/voting", label: "Voting", icon: Vote },
   { href: "/announcements", label: "Announcements", icon: Megaphone },
   { href: "/members", label: "Members", icon: Users },
+  { href: "/notifications", label: "Notifications", icon: Bell },
   { href: "/profile", label: "My Profile", icon: UserRound },
+  { href: "/settings/notifications", label: "Settings", icon: Settings },
   {
     href: "/admin/applications",
     label: "Applications",
@@ -69,13 +74,28 @@ const navItems: {
     access: "reviewer",
   },
   { href: "/admin", label: "Admin", icon: Shield, access: "admin" },
+  {
+    href: "/admin/email-outbox",
+    label: "Email Outbox",
+    icon: Mail,
+    access: "admin",
+  },
 ];
 
 function formatRoleLabel(role: string) {
   return role.toLowerCase().replace(/^\w/, (character) => character.toUpperCase());
 }
 
-export function AppShell({ club, user, children }: AppShellProps) {
+function formatUnreadCount(count: number) {
+  return count >= 100 ? "99+" : String(count);
+}
+
+export function AppShell({
+  club,
+  user,
+  unreadNotificationCount = 0,
+  children,
+}: AppShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -221,6 +241,12 @@ export function AppShell({ club, user, children }: AppShellProps) {
                     >
                       <Icon className="size-4 shrink-0" />
                       <span className="min-w-0">{item.label}</span>
+                      {item.href === "/notifications" &&
+                      unreadNotificationCount > 0 ? (
+                        <span className="ml-auto inline-flex min-w-6 items-center justify-center rounded-full bg-amber-100 px-1.5 py-0.5 text-[0.68rem] font-semibold text-amber-900">
+                          {formatUnreadCount(unreadNotificationCount)}
+                        </span>
+                      ) : null}
                     </Link>
                   );
                 })}

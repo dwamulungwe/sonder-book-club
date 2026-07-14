@@ -112,6 +112,14 @@ export async function createCommunityPostAction(formData: FormData) {
     );
   }
 
+  if (parsed.data.postType === CommunityPostType.NEW_MEMBER_WELCOME) {
+    redirectWithNotice(
+      redirectTo,
+      "error",
+      "Welcome posts are created by the membership approval flow.",
+    );
+  }
+
   await ensureRelatedBookExists(parsed.data.relatedBookId, redirectTo);
 
   await db.communityPost.create({

@@ -307,6 +307,9 @@ export async function getMembersPageData(userId: string) {
     getClubSettings(),
     getMembershipForUser(userId),
     db.membership.findMany({
+      where: {
+        status: MembershipStatus.ACTIVE,
+      },
       include: {
         user: {
           include: {

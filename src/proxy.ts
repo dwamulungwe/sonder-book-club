@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { auth } from "@/auth";
 
-const publicRoutes = new Set(["/login", "/signup", "/forgot-password"]);
+const publicRoutes = new Set(["/login", "/signup", "/join", "/forgot-password"]);
 
 const protectedPrefixes = [
   "/dashboard",
@@ -14,6 +14,7 @@ const protectedPrefixes = [
   "/announcements",
   "/members",
   "/profile",
+  "/application-status",
   "/admin",
 ];
 

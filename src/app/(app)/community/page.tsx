@@ -66,6 +66,7 @@ const postTypeLabels = {
   BOOK_RECOMMENDATION: "Book recommendation",
   CURRENTLY_LISTENING: "Currently listening",
   ANNOUNCEMENT: "Announcement",
+  NEW_MEMBER_WELCOME: "New member welcome",
 };
 
 const reactionLabels = {
@@ -169,7 +170,11 @@ function PostComposer({
                 className="flex h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
               >
                 {communityPostTypeValues
-                  .filter((postType) => canModerate || postType !== "ANNOUNCEMENT")
+                  .filter(
+                    (postType) =>
+                      postType !== "NEW_MEMBER_WELCOME" &&
+                      (canModerate || postType !== "ANNOUNCEMENT"),
+                  )
                   .map((postType) => (
                     <option key={postType} value={postType}>
                       {postTypeLabels[postType]}

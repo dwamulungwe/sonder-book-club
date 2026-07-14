@@ -166,6 +166,7 @@ export default async function AdminPage() {
                   defaultValue={membership.status}
                   className="flex h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
                 >
+                  <option value="PENDING">pending</option>
                   <option value="ACTIVE">active</option>
                   <option value="SUSPENDED">suspended</option>
                   <option value="LEFT">left</option>

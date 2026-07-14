@@ -16,9 +16,14 @@ export default function ForgotPasswordPage() {
         footer={
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <span>Back to your session</span>
-            <Link href="/login" className="font-semibold text-amber-800">
-              Return to login
-            </Link>
+            <div className="flex flex-wrap gap-3">
+              <Link href="/login" className="font-semibold text-amber-800">
+                Return to login
+              </Link>
+              <Link href="/join" className="font-semibold text-amber-800">
+                Apply to join
+              </Link>
+            </div>
           </div>
         }
       >

@@ -6,6 +6,7 @@ export const communityPostTypeValues = [
   "BOOK_RECOMMENDATION",
   "CURRENTLY_LISTENING",
   "ANNOUNCEMENT",
+  "NEW_MEMBER_WELCOME",
 ] as const;
 
 export const postReactionTypeValues = [
@@ -79,6 +80,14 @@ export const communityPostSchema = z
         code: "custom",
         path: ["body"],
         message: "Announcements need body text.",
+      });
+    }
+
+    if (data.postType === "NEW_MEMBER_WELCOME" && !body) {
+      context.addIssue({
+        code: "custom",
+        path: ["body"],
+        message: "Welcome posts need body text.",
       });
     }
 

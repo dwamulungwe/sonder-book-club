@@ -5,6 +5,7 @@ import {
   AttendanceStatus,
   BookStatus,
   CommunityPostType,
+  MembershipApplicationStatus,
   MembershipStatus,
   PollStatus,
   PostReactionType,
@@ -61,6 +62,7 @@ async function main() {
   const lastWeek = addDays(now, -7);
 
   await prisma.contentReport.deleteMany();
+  await prisma.membershipApplication.deleteMany();
   await prisma.postBookmark.deleteMany();
   await prisma.postReaction.deleteMany();
   await prisma.postComment.deleteMany();
@@ -135,6 +137,30 @@ async function main() {
     email: "guest@bookclub.dev",
     passwordHash: sharedPassword,
     role: SystemRole.GUEST,
+  });
+
+  const submittedApplicant = await createUserWithMembership({
+    name: "Amina Sitali",
+    email: "amina.applicant@bookclub.dev",
+    passwordHash: sharedPassword,
+    role: SystemRole.GUEST,
+    status: MembershipStatus.PENDING,
+  });
+
+  const reviewApplicant = await createUserWithMembership({
+    name: "Tadala Nkonde",
+    email: "tadala.review@bookclub.dev",
+    passwordHash: sharedPassword,
+    role: SystemRole.GUEST,
+    status: MembershipStatus.PENDING,
+  });
+
+  const waitlistedApplicant = await createUserWithMembership({
+    name: "Misozi Lungu",
+    email: "misozi.waitlist@bookclub.dev",
+    passwordHash: sharedPassword,
+    role: SystemRole.GUEST,
+    status: MembershipStatus.PENDING,
   });
 
   await prisma.memberProfile.createMany({
@@ -215,6 +241,36 @@ async function main() {
         readingInterests:
           "Sharp plots, contemporary African writing, and books that move quickly.",
         currentlyReadingText: "My Sister, the Serial Killer",
+      },
+      {
+        userId: submittedApplicant.id,
+        phoneNumber: "+260 96 555 0211",
+        location: "Lusaka",
+        occupation: "Journalist",
+        favouriteGenres: ["Memoir", "Literary fiction", "Essays"],
+        favouriteBooks: "Stay True, Nervous Conditions, The Year of Magical Thinking",
+        readingInterests:
+          "Personal essays, books about memory, and stories that make ordinary days feel charged.",
+      },
+      {
+        userId: reviewApplicant.id,
+        phoneNumber: "+260 97 555 0212",
+        location: "Kabwe",
+        occupation: "Civil engineer",
+        favouriteGenres: ["Historical fiction", "African literature"],
+        favouriteBooks: "The Old Drift, Homegoing",
+        readingInterests:
+          "Zambian writing, historical fiction, and books that open conversations about place.",
+      },
+      {
+        userId: waitlistedApplicant.id,
+        phoneNumber: "+260 95 555 0213",
+        location: "Ndola",
+        occupation: "Counsellor",
+        favouriteGenres: ["Poetry", "Short stories", "Psychology"],
+        favouriteBooks: "The Prophet, What It Means When a Man Falls from the Sky",
+        readingInterests:
+          "Short forms, reflective nonfiction, and books that help people speak honestly.",
       },
     ],
   });
@@ -626,6 +682,113 @@ async function main() {
       listeningCreator: "Gimlet",
       listeningUrl: "https://gimletmedia.com/shows/heavyweight",
     },
+  });
+
+  const chipoWelcomePost = await prisma.communityPost.create({
+    data: {
+      authorId: memberTwo.id,
+      postType: CommunityPostType.NEW_MEMBER_WELCOME,
+      body: "Welcome Chipo Mwanza to Sonder. We are glad to have another reader in the room.",
+      createdAt: addDays(now, -12),
+    },
+  });
+
+  await prisma.membershipApplication.createMany({
+    data: [
+      {
+        applicantUserId: submittedApplicant.id,
+        fullName: "Amina Sitali",
+        normalizedEmail: "amina.applicant@bookclub.dev",
+        email: "amina.applicant@bookclub.dev",
+        phoneNumber: "+260 96 555 0211",
+        location: "Lusaka",
+        occupation: "Journalist",
+        readingInterests:
+          "Personal essays, books about memory, and stories that make ordinary days feel charged.",
+        favouriteGenres: ["Memoir", "Literary fiction", "Essays"],
+        favouriteBooks: "Stay True, Nervous Conditions, The Year of Magical Thinking",
+        reasonForJoining:
+          "I miss being in a room where people take books seriously without making the conversation stiff.",
+        referralSource: "Instagram",
+        acceptedCommunityRules: true,
+        acceptedPrivacyPolicy: true,
+        status: MembershipApplicationStatus.SUBMITTED,
+        submittedAt: addDays(now, -2),
+      },
+      {
+        applicantUserId: reviewApplicant.id,
+        fullName: "Tadala Nkonde",
+        normalizedEmail: "tadala.review@bookclub.dev",
+        email: "tadala.review@bookclub.dev",
+        phoneNumber: "+260 97 555 0212",
+        location: "Kabwe",
+        occupation: "Civil engineer",
+        readingInterests:
+          "Zambian writing, historical fiction, and books that open conversations about place.",
+        favouriteGenres: ["Historical fiction", "African literature"],
+        favouriteBooks: "The Old Drift, Homegoing",
+        reasonForJoining:
+          "I want a consistent reading practice and a community that can help me discover more regional writing.",
+        referralSource: "Friend referral",
+        acceptedCommunityRules: true,
+        acceptedPrivacyPolicy: true,
+        status: MembershipApplicationStatus.UNDER_REVIEW,
+        submittedAt: addDays(now, -5),
+        reviewedAt: addDays(now, -1),
+        reviewedById: moderator.id,
+        reviewNotes:
+          "Thoughtful application. Ask about Saturday availability before approval.",
+      },
+      {
+        applicantUserId: waitlistedApplicant.id,
+        fullName: "Misozi Lungu",
+        normalizedEmail: "misozi.waitlist@bookclub.dev",
+        email: "misozi.waitlist@bookclub.dev",
+        phoneNumber: "+260 95 555 0213",
+        location: "Ndola",
+        occupation: "Counsellor",
+        readingInterests:
+          "Short forms, reflective nonfiction, and books that help people speak honestly.",
+        favouriteGenres: ["Poetry", "Short stories", "Psychology"],
+        favouriteBooks: "The Prophet, What It Means When a Man Falls from the Sky",
+        reasonForJoining:
+          "The club feels like the kind of gentle accountability I need to read beyond work material.",
+        referralSource: "Public event",
+        acceptedCommunityRules: true,
+        acceptedPrivacyPolicy: true,
+        status: MembershipApplicationStatus.WAITLISTED,
+        submittedAt: addDays(now, -10),
+        reviewedAt: addDays(now, -4),
+        reviewedById: admin.id,
+        reviewNotes:
+          "Strong fit, but waitlist until the next intake window opens.",
+      },
+      {
+        applicantUserId: memberTwo.id,
+        fullName: "Chipo Mwanza",
+        normalizedEmail: "chipo@bookclub.dev",
+        email: "chipo@bookclub.dev",
+        phoneNumber: "+260 97 555 0194",
+        location: "Woodlands",
+        occupation: "Brand designer",
+        readingInterests:
+          "Family stories, sensory writing, migration, and books with memorable meals.",
+        favouriteGenres: ["Historical fiction", "Contemporary romance", "Food writing"],
+        favouriteBooks: "Hamnet, The Vanishing Half, Like Water for Chocolate",
+        reasonForJoining:
+          "I wanted a thoughtful local reading rhythm and a group that notices style as much as plot.",
+        referralSource: "Founder invitation",
+        acceptedCommunityRules: true,
+        acceptedPrivacyPolicy: true,
+        status: MembershipApplicationStatus.APPROVED,
+        submittedAt: addDays(now, -21),
+        reviewedAt: addDays(now, -12),
+        reviewedById: admin.id,
+        reviewNotes:
+          "Approved during the community foundation intake. Welcome post linked.",
+        welcomePostId: chipoWelcomePost.id,
+      },
+    ],
   });
 
   const firstComment = await prisma.postComment.create({

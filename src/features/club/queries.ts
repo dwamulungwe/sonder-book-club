@@ -4,6 +4,7 @@ import {
   PollStatus,
 } from "@prisma/client";
 
+import { getRecentCommunityPosts } from "@/features/community/queries";
 import { getClubSettings } from "@/lib/club";
 import { db } from "@/lib/db";
 import { getProgressState } from "@/lib/progress";
@@ -14,7 +15,7 @@ export async function getClubShellData() {
 }
 
 export async function getDashboardData(userId: string) {
-  const [club, viewerMembership, memberCount, currentBook, nextMeeting, activePlan, recentAnnouncements, openPollCount] =
+  const [club, viewerMembership, memberCount, currentBook, nextMeeting, activePlan, recentAnnouncements, openPollCount, recentCommunityPosts] =
     await Promise.all([
       getClubSettings(),
       getMembershipForUser(userId),
@@ -84,6 +85,7 @@ export async function getDashboardData(userId: string) {
           },
         },
       }),
+      getRecentCommunityPosts(),
     ]);
 
   const progressSummary =
@@ -125,6 +127,7 @@ export async function getDashboardData(userId: string) {
     activePlan,
     recentAnnouncements,
     openPollCount,
+    recentCommunityPosts,
     progressSummary,
   };
 }
@@ -304,8 +307,15 @@ export async function getMembersPageData(userId: string) {
     getClubSettings(),
     getMembershipForUser(userId),
     db.membership.findMany({
+      where: {
+        status: MembershipStatus.ACTIVE,
+      },
       include: {
-        user: true,
+        user: {
+          include: {
+            profile: true,
+          },
+        },
       },
       orderBy: [
         { role: "asc" },
@@ -318,6 +328,26 @@ export async function getMembersPageData(userId: string) {
     club,
     viewerMembership,
     memberships,
+  };
+}
+
+export async function getProfilePageData(userId: string) {
+  const [club, profileUser] = await Promise.all([
+    getClubSettings(),
+    db.user.findUnique({
+      where: {
+        id: userId,
+      },
+      include: {
+        membership: true,
+        profile: true,
+      },
+    }),
+  ]);
+
+  return {
+    club,
+    profileUser,
   };
 }
 

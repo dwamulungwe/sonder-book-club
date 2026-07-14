@@ -1,6 +1,7 @@
 import {
   AttendanceStatus,
   BookStatus,
+  MembershipApplicationStatus,
   MembershipStatus,
   PollStatus,
   RsvpStatus,
@@ -31,6 +32,12 @@ export function formatRole(role: SystemRole) {
 
 export function formatMembershipStatus(status: MembershipStatus) {
   return status.toLowerCase();
+}
+
+export function formatMembershipApplicationStatus(
+  status: MembershipApplicationStatus,
+) {
+  return status.toLowerCase().replaceAll("_", " ");
 }
 
 export function formatBookStatus(status: BookStatus) {

@@ -14,6 +14,7 @@ enum SystemRole {
 }
 
 enum MembershipStatus {
+  PENDING
   ACTIVE
   SUSPENDED
   LEFT
@@ -90,6 +91,40 @@ enum AnnouncementStatus {
   ARCHIVED
 }
 
+enum CommunityPostType {
+  GENERAL
+  READING_UPDATE
+  BOOK_RECOMMENDATION
+  CURRENTLY_LISTENING
+  ANNOUNCEMENT
+  NEW_MEMBER_WELCOME
+}
+
+enum MembershipApplicationStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  WAITLISTED
+}
+
+enum PostReactionType {
+  INSIGHTFUL
+  BEAUTIFULLY_SAID
+  ADDING_TO_MY_LIST
+  I_AGREE
+  MADE_ME_THINK
+  APPLAUSE
+}
+
+enum ContentReportStatus {
+  OPEN
+  REVIEWING
+  RESOLVED
+  DISMISSED
+}
+
 enum PaymentStatus {
   PENDING
   PAID
@@ -108,32 +143,41 @@ enum PaymentMethod {
 }
 
 model User {
-  id                   String              @id @default(cuid())
-  name                 String
-  email                String              @unique
-  emailVerified        DateTime?
-  image                String?
-  passwordHash         String?
-  systemRole           SystemRole          @default(GUEST)
-  membership           Membership?
-  createdBooks         Book[]              @relation("BookCreator")
-  createdPlans         ReadingPlan[]       @relation("PlanCreator")
-  progresses           ReadingProgress[]
-  createdMeetings      Meeting[]           @relation("MeetingCreator")
-  rsvps                MeetingRsvp[]
-  attendances          MeetingAttendance[] @relation("AttendanceMember")
-  recordedAttendances  MeetingAttendance[] @relation("AttendanceRecorder")
-  meetingNotesAuthored MeetingNote[]       @relation("MeetingNoteAuthor")
-  createdAnnouncements Announcement[]      @relation("AnnouncementCreator")
-  nominations          BookNomination[]
-  createdPolls         Poll[]              @relation("PollCreator")
-  votes                PollVote[]
-  recordedPayments     MembershipPayment[] @relation("PaymentRecorder")
-  accounts             Account[]
-  sessions             Session[]
-  deletedAt            DateTime?
-  createdAt            DateTime            @default(now())
-  updatedAt            DateTime            @updatedAt
+  id                     String                  @id @default(cuid())
+  name                   String
+  email                  String                  @unique
+  emailVerified          DateTime?
+  image                  String?
+  passwordHash           String?
+  systemRole             SystemRole              @default(GUEST)
+  membership             Membership?
+  createdBooks           Book[]                  @relation("BookCreator")
+  createdPlans           ReadingPlan[]           @relation("PlanCreator")
+  progresses             ReadingProgress[]
+  createdMeetings        Meeting[]               @relation("MeetingCreator")
+  rsvps                  MeetingRsvp[]
+  attendances            MeetingAttendance[]     @relation("AttendanceMember")
+  recordedAttendances    MeetingAttendance[]     @relation("AttendanceRecorder")
+  meetingNotesAuthored   MeetingNote[]           @relation("MeetingNoteAuthor")
+  createdAnnouncements   Announcement[]          @relation("AnnouncementCreator")
+  nominations            BookNomination[]
+  createdPolls           Poll[]                  @relation("PollCreator")
+  votes                  PollVote[]
+  recordedPayments       MembershipPayment[]     @relation("PaymentRecorder")
+  communityPosts         CommunityPost[]         @relation("CommunityPostAuthor")
+  postComments           PostComment[]           @relation("PostCommentAuthor")
+  postReactions          PostReaction[]
+  postBookmarks          PostBookmark[]
+  contentReports         ContentReport[]         @relation("ContentReportReporter")
+  reviewedReports        ContentReport[]         @relation("ContentReportReviewer")
+  profile                MemberProfile?
+  membershipApplications MembershipApplication[] @relation("MembershipApplicationApplicant")
+  reviewedApplications   MembershipApplication[] @relation("MembershipApplicationReviewer")
+  accounts               Account[]
+  sessions               Session[]
+  deletedAt              DateTime?
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
 
   @@index([systemRole])
   @@index([deletedAt])
@@ -157,41 +201,65 @@ model ClubSettings {
 }
 
 model Membership {
-  id        String           @id @default(cuid())
-  userId    String           @unique
-  role      SystemRole       @default(MEMBER)
-  status    MembershipStatus @default(ACTIVE)
-  joinedAt  DateTime         @default(now())
+  id        String              @id @default(cuid())
+  userId    String              @unique
+  role      SystemRole          @default(MEMBER)
+  status    MembershipStatus    @default(ACTIVE)
+  joinedAt  DateTime            @default(now())
   payments  MembershipPayment[]
-  createdAt DateTime         @default(now())
-  updatedAt DateTime         @updatedAt
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([role, status])
   @@map("memberships")
 }
 
+model MemberProfile {
+  id                        String   @id @default(cuid())
+  userId                    String   @unique
+  bio                       String?  @db.VarChar(800)
+  phoneNumber               String?  @db.VarChar(40)
+  location                  String?  @db.VarChar(120)
+  occupation                String?  @db.VarChar(120)
+  profileImageUrl           String?  @db.VarChar(500)
+  favouriteGenres           String[] @default([])
+  favouriteBooks            String?  @db.VarChar(800)
+  readingInterests          String?  @db.VarChar(800)
+  currentlyReadingText      String?  @db.VarChar(240)
+  currentlyListeningTitle   String?  @db.VarChar(180)
+  currentlyListeningCreator String?  @db.VarChar(180)
+  currentlyListeningUrl     String?  @db.VarChar(500)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([location])
+  @@index([updatedAt])
+  @@map("member_profiles")
+}
+
 model Book {
-  id          String           @id @default(cuid())
-  title       String
-  author      String
-  genre       String?
-  isbn        String?
-  pageCount   Int?
-  coverUrl    String?
-  summary     String?
-  status      BookStatus       @default(BACKLOG)
-  archivedAt  DateTime?
-  deletedAt   DateTime?
-  createdById String
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  createdBy   User             @relation("BookCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  readingPlans ReadingPlan[]
-  nominations BookNomination[]
-  pollWins    Poll[]           @relation("WinningBook")
-  pollOptions PollOption[]
+  id             String           @id @default(cuid())
+  title          String
+  author         String
+  genre          String?
+  pageCount      Int?
+  coverUrl       String?
+  summary        String?
+  status         BookStatus       @default(BACKLOG)
+  archivedAt     DateTime?
+  deletedAt      DateTime?
+  createdById    String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  createdBy      User             @relation("BookCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  readingPlans   ReadingPlan[]
+  nominations    BookNomination[]
+  pollWins       Poll[]           @relation("WinningBook")
+  pollOptions    PollOption[]
+  communityPosts CommunityPost[]  @relation("CommunityPostBook")
 
   @@index([status])
   @@index([createdAt])
@@ -200,23 +268,23 @@ model Book {
 }
 
 model ReadingPlan {
-  id           String             @id @default(cuid())
-  bookId        String
-  title         String
-  targetMode    TargetMode
-  status        ReadingPlanStatus @default(ACTIVE)
-  weekCount     Int
-  chapterCount  Int?
-  isActive      Boolean           @default(true)
-  createdById   String
-  startsOn      DateTime
-  endsOn        DateTime
-  deletedAt     DateTime?
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
-  book          Book              @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  createdBy     User              @relation("PlanCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  targets       ReadingTarget[]
+  id           String            @id @default(cuid())
+  bookId       String
+  title        String
+  targetMode   TargetMode
+  status       ReadingPlanStatus @default(ACTIVE)
+  weekCount    Int
+  chapterCount Int?
+  isActive     Boolean           @default(true)
+  createdById  String
+  startsOn     DateTime
+  endsOn       DateTime
+  deletedAt    DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  book         Book              @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  createdBy    User              @relation("PlanCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  targets      ReadingTarget[]
 
   @@index([status])
   @@index([isActive])
@@ -310,16 +378,16 @@ model MeetingRsvp {
 }
 
 model MeetingAttendance {
-  id           String            @id @default(cuid())
+  id           String           @id @default(cuid())
   meetingId    String
   memberId     String
-  status       AttendanceStatus  @default(PENDING)
+  status       AttendanceStatus @default(PENDING)
   recordedById String?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  meeting      Meeting           @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  member       User              @relation("AttendanceMember", fields: [memberId], references: [id], onDelete: Cascade)
-  recordedBy   User?             @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  meeting      Meeting          @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  member       User             @relation("AttendanceMember", fields: [memberId], references: [id], onDelete: Cascade)
+  recordedBy   User?            @relation("AttendanceRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@unique([meetingId, memberId])
   @@index([meetingId, status])
@@ -328,17 +396,17 @@ model MeetingAttendance {
 }
 
 model MeetingNote {
-  id         String               @id @default(cuid())
+  id         String                @id @default(cuid())
   meetingId  String
   authorId   String
   title      String?
   content    String
   visibility MeetingNoteVisibility @default(MEMBERS_ONLY)
   deletedAt  DateTime?
-  createdAt  DateTime             @default(now())
-  updatedAt  DateTime             @updatedAt
-  meeting    Meeting              @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  author     User                 @relation("MeetingNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  createdAt  DateTime              @default(now())
+  updatedAt  DateTime              @updatedAt
+  meeting    Meeting               @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  author     User                  @relation("MeetingNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
 
   @@index([meetingId, createdAt])
   @@index([authorId, createdAt])
@@ -347,15 +415,15 @@ model MeetingNote {
 }
 
 model Announcement {
-  id          String              @id @default(cuid())
+  id          String             @id @default(cuid())
   title       String
   body        String
-  status      AnnouncementStatus  @default(PUBLISHED)
+  status      AnnouncementStatus @default(PUBLISHED)
   createdById String
   deletedAt   DateTime?
-  createdAt   DateTime            @default(now())
-  updatedAt   DateTime            @updatedAt
-  createdBy   User                @relation("AnnouncementCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  createdBy   User               @relation("AnnouncementCreator", fields: [createdById], references: [id], onDelete: Cascade)
 
   @@index([createdAt])
   @@index([status])
@@ -363,17 +431,159 @@ model Announcement {
   @@map("announcements")
 }
 
-model BookNomination {
-  id          String            @id @default(cuid())
-  bookId       String           @unique
-  nominatorId  String
-  reason       String?
-  status       NominationStatus @default(ACTIVE)
+model CommunityPost {
+  id                 String                 @id @default(cuid())
+  authorId           String
+  body               String                 @db.VarChar(2000)
+  postType           CommunityPostType      @default(GENERAL)
+  relatedBookId      String?
+  listeningTitle     String?                @db.VarChar(180)
+  listeningCreator   String?                @db.VarChar(180)
+  listeningUrl       String?                @db.VarChar(500)
+  isPinned           Boolean                @default(false)
+  editedAt           DateTime?
+  deletedAt          DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  author             User                   @relation("CommunityPostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  relatedBook        Book?                  @relation("CommunityPostBook", fields: [relatedBookId], references: [id], onDelete: SetNull)
+  comments           PostComment[]
+  reactions          PostReaction[]
+  bookmarks          PostBookmark[]
+  reports            ContentReport[]        @relation("ContentReportPost")
+  welcomeApplication MembershipApplication? @relation("MembershipApplicationWelcomePost")
+
+  @@index([isPinned, createdAt])
+  @@index([authorId, createdAt])
+  @@index([postType, createdAt])
+  @@index([relatedBookId])
+  @@index([deletedAt])
+  @@map("community_posts")
+}
+
+model MembershipApplication {
+  id                     String                      @id @default(cuid())
+  applicantUserId        String?
+  fullName               String                      @db.VarChar(120)
+  normalizedEmail        String                      @db.VarChar(255)
+  email                  String                      @db.VarChar(255)
+  phoneNumber            String                      @db.VarChar(40)
+  location               String                      @db.VarChar(120)
+  occupation             String?                     @db.VarChar(120)
+  readingInterests       String                      @db.VarChar(800)
+  favouriteGenres        String[]                    @default([])
+  favouriteBooks         String?                     @db.VarChar(800)
+  reasonForJoining       String                      @db.VarChar(1200)
+  referralSource         String?                     @db.VarChar(200)
+  acceptedCommunityRules Boolean
+  acceptedPrivacyPolicy  Boolean
+  status                 MembershipApplicationStatus @default(SUBMITTED)
+  submittedAt            DateTime                    @default(now())
+  reviewedAt             DateTime?
+  reviewedById           String?
+  reviewNotes            String?                     @db.VarChar(2000)
+  welcomePostId          String?                     @unique
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+  applicantUser          User?                       @relation("MembershipApplicationApplicant", fields: [applicantUserId], references: [id], onDelete: SetNull)
+  reviewedBy             User?                       @relation("MembershipApplicationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  welcomePost            CommunityPost?              @relation("MembershipApplicationWelcomePost", fields: [welcomePostId], references: [id], onDelete: SetNull)
+
+  @@index([normalizedEmail, status])
+  @@index([status, submittedAt])
+  @@index([applicantUserId, createdAt])
+  @@index([reviewedById, reviewedAt])
+  @@map("membership_applications")
+}
+
+model PostComment {
+  id              String          @id @default(cuid())
+  postId          String
+  authorId        String
+  parentCommentId String?
+  body            String          @db.VarChar(1200)
+  editedAt        DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  post            CommunityPost   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author          User            @relation("PostCommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  parentComment   PostComment?    @relation("PostCommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         PostComment[]   @relation("PostCommentReplies")
+  reports         ContentReport[] @relation("ContentReportComment")
+
+  @@index([postId, createdAt])
+  @@index([authorId, createdAt])
+  @@index([parentCommentId])
+  @@index([deletedAt])
+  @@map("post_comments")
+}
+
+model PostReaction {
+  id           String           @id @default(cuid())
+  postId       String
+  userId       String
+  reactionType PostReactionType
   createdAt    DateTime         @default(now())
-  updatedAt    DateTime         @updatedAt
-  book         Book             @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  nominator    User             @relation(fields: [nominatorId], references: [id], onDelete: Cascade)
-  pollOptions  PollOption[]
+  post         CommunityPost    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user         User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId, reactionType])
+  @@index([userId, createdAt])
+  @@map("post_reactions")
+}
+
+model PostBookmark {
+  id        String        @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId, createdAt])
+  @@map("post_bookmarks")
+}
+
+model ContentReport {
+  id           String              @id @default(cuid())
+  postId       String?
+  commentId    String?
+  reporterId   String
+  reason       String              @db.VarChar(120)
+  details      String?             @db.VarChar(1000)
+  status       ContentReportStatus @default(OPEN)
+  reviewedById String?
+  reviewedAt   DateTime?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  post         CommunityPost?      @relation("ContentReportPost", fields: [postId], references: [id], onDelete: Cascade)
+  comment      PostComment?        @relation("ContentReportComment", fields: [commentId], references: [id], onDelete: Cascade)
+  reporter     User                @relation("ContentReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reviewedBy   User?               @relation("ContentReportReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([postId])
+  @@index([commentId])
+  @@index([reporterId, createdAt])
+  @@index([reviewedById])
+  @@map("content_reports")
+}
+
+model BookNomination {
+  id          String           @id @default(cuid())
+  bookId      String           @unique
+  nominatorId String
+  reason      String?
+  status      NominationStatus @default(ACTIVE)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  book        Book             @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  nominator   User             @relation(fields: [nominatorId], references: [id], onDelete: Cascade)
+  pollOptions PollOption[]
 
   @@index([createdAt])
   @@index([status])
@@ -381,20 +591,20 @@ model BookNomination {
 }
 
 model Poll {
-  id            String      @id @default(cuid())
+  id            String       @id @default(cuid())
   title         String
   description   String?
-  status        PollStatus  @default(DRAFT)
+  status        PollStatus   @default(DRAFT)
   opensAt       DateTime
   closesAt      DateTime
   closedAt      DateTime?
   createdById   String
   winningBookId String?
   deletedAt     DateTime?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  createdBy     User        @relation("PollCreator", fields: [createdById], references: [id], onDelete: Cascade)
-  winningBook   Book?       @relation("WinningBook", fields: [winningBookId], references: [id], onDelete: SetNull)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  createdBy     User         @relation("PollCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  winningBook   Book?        @relation("WinningBook", fields: [winningBookId], references: [id], onDelete: SetNull)
   options       PollOption[]
   votes         PollVote[]
 
@@ -440,13 +650,13 @@ model PollVote {
 }
 
 model MembershipPayment {
-  id           String          @id @default(cuid())
+  id           String         @id @default(cuid())
   membershipId String
-  amount       Decimal         @db.Decimal(10, 2)
-  currency     String          @db.VarChar(3)
-  status       PaymentStatus   @default(PENDING)
+  amount       Decimal        @db.Decimal(10, 2)
+  currency     String         @db.VarChar(3)
+  status       PaymentStatus  @default(PENDING)
   method       PaymentMethod?
-  reference    String?         @unique
+  reference    String?        @unique
   dueAt        DateTime
   paidAt       DateTime?
   periodStart  DateTime?
@@ -454,10 +664,10 @@ model MembershipPayment {
   notes        String?
   recordedById String?
   deletedAt    DateTime?
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-  membership   Membership      @relation(fields: [membershipId], references: [id], onDelete: Cascade)
-  recordedBy   User?           @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  membership   Membership     @relation(fields: [membershipId], references: [id], onDelete: Cascade)
+  recordedBy   User?          @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@unique([membershipId, periodStart, periodEnd])
   @@index([membershipId, status])

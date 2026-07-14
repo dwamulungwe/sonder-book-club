@@ -1,0 +1,17 @@
+warning: in the working copy of 'CHANGELOG.md', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'prisma/schema.prisma', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'prisma/seed.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/(app)/admin/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/(app)/community/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/(app)/layout.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/(auth)/forgot-password/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/(auth)/login/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/app/(auth)/signup/page.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/components/app/app-shell.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/admin/schemas.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/auth/actions.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/club/queries.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/community/actions.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/features/community/schemas.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/lib/formatters.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'src/proxy.ts', LF will be replaced by CRLF the next time Git touches it

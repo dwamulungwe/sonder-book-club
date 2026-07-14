@@ -6,12 +6,15 @@ import { usePathname, useSearchParams } from "next/navigation";
 import {
   BookOpenText,
   CalendarDays,
-  Gauge,
+  ClipboardList,
+  House,
   MapPin,
   Megaphone,
   Menu,
+  MessageCircle,
   Settings,
   Shield,
+  UserRound,
   Users,
   Vote,
   X,
@@ -36,19 +39,36 @@ type AppShellProps = {
     name?: string | null;
     email?: string | null;
     systemRole: string;
+    membership?: {
+      role: string;
+      status: string;
+    } | null;
   };
   children: React.ReactNode;
 };
 
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: Gauge },
+const navItems: {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  access?: "admin" | "reviewer";
+}[] = [
+  { href: "/dashboard", label: "Home", icon: House },
+  { href: "/community", label: "Community", icon: MessageCircle },
   { href: "/books", label: "Books", icon: BookOpenText },
   { href: "/reading-plan", label: "Reading Plan", icon: BookOpenText },
   { href: "/meetings", label: "Meetings", icon: CalendarDays },
   { href: "/voting", label: "Voting", icon: Vote },
   { href: "/announcements", label: "Announcements", icon: Megaphone },
   { href: "/members", label: "Members", icon: Users },
-  { href: "/admin", label: "Admin", icon: Shield },
+  { href: "/profile", label: "My Profile", icon: UserRound },
+  {
+    href: "/admin/applications",
+    label: "Applications",
+    icon: ClipboardList,
+    access: "reviewer",
+  },
+  { href: "/admin", label: "Admin", icon: Shield, access: "admin" },
 ];
 
 function formatRoleLabel(role: string) {
@@ -59,7 +79,16 @@ export function AppShell({ club, user, children }: AppShellProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const canSeeAdmin = user.systemRole === "ADMIN";
+  const isActiveMember = user.membership?.status === "ACTIVE";
+  const canSeeAdmin =
+    isActiveMember &&
+    (user.systemRole === "ADMIN" || user.membership?.role === "ADMIN");
+  const canReviewApplications =
+    isActiveMember &&
+    (user.systemRole === "ADMIN" ||
+      user.systemRole === "MODERATOR" ||
+      user.membership?.role === "ADMIN" ||
+      user.membership?.role === "MODERATOR");
   const mobileMenuId = "app-mobile-navigation";
   const errorMessage = searchParams.get("error");
   const successMessage = searchParams.get("success");
@@ -160,9 +189,22 @@ export function AppShell({ club, user, children }: AppShellProps) {
           >
             <nav className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1">
               {navItems
-                .filter((item) => (item.href === "/admin" ? canSeeAdmin : true))
+                .filter((item) => {
+                  if (item.access === "admin") {
+                    return canSeeAdmin;
+                  }
+
+                  if (item.access === "reviewer") {
+                    return canReviewApplications;
+                  }
+
+                  return true;
+                })
                 .map((item) => {
-                  const isActive = pathname === item.href;
+                  const isActive =
+                    pathname === item.href ||
+                    (item.href !== "/dashboard" &&
+                      pathname.startsWith(`${item.href}/`));
                   const Icon = item.icon;
 
                   return (

@@ -89,26 +89,20 @@ export default async function BooksPage() {
                     <Input id="book-pages" name="pageCount" type="number" min="1" />
                   </div>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="book-isbn">ISBN</Label>
-                    <Input id="book-isbn" name="isbn" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="book-status">Status</Label>
-                    <select
-                      id="book-status"
-                      name="status"
-                      defaultValue="BACKLOG"
-                      className="flex h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
-                    >
-                      {statusOptions.map((status) => (
-                        <option key={status} value={status}>
-                          {formatBookStatus(status)}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="book-status">Status</Label>
+                  <select
+                    id="book-status"
+                    name="status"
+                    defaultValue="BACKLOG"
+                    className="flex h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900"
+                  >
+                    {statusOptions.map((status) => (
+                      <option key={status} value={status}>
+                        {formatBookStatus(status)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="book-cover">Cover URL</Label>
@@ -137,7 +131,7 @@ export default async function BooksPage() {
                 Guests and members can browse the library here. Moderators and admins can add or update titles.
               </p>
               <p>
-                The current book drives the reading plan and keeps the dashboard aligned.
+                The current book drives the reading plan and keeps the community home aligned.
               </p>
             </CardContent>
           </Card>
@@ -210,14 +204,6 @@ export default async function BooksPage() {
                             type="number"
                             min="1"
                             defaultValue={book.pageCount ?? undefined}
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor={`isbn-${book.id}`}>ISBN</Label>
-                          <Input
-                            id={`isbn-${book.id}`}
-                            name="isbn"
-                            defaultValue={book.isbn ?? ""}
                           />
                         </div>
                         <div className="space-y-2">

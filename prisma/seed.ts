@@ -4,8 +4,11 @@ import { PrismaPg } from "@prisma/adapter-pg";
 import {
   AttendanceStatus,
   BookStatus,
+  CommunityPostType,
+  MembershipApplicationStatus,
   MembershipStatus,
   PollStatus,
+  PostReactionType,
   PrismaClient,
   RsvpStatus,
   SystemRole,
@@ -58,6 +61,12 @@ async function main() {
   const twoWeeksOut = addDays(now, 14);
   const lastWeek = addDays(now, -7);
 
+  await prisma.contentReport.deleteMany();
+  await prisma.membershipApplication.deleteMany();
+  await prisma.postBookmark.deleteMany();
+  await prisma.postReaction.deleteMany();
+  await prisma.postComment.deleteMany();
+  await prisma.communityPost.deleteMany();
   await prisma.pollVote.deleteMany();
   await prisma.pollOption.deleteMany();
   await prisma.poll.deleteMany();
@@ -73,6 +82,7 @@ async function main() {
   await prisma.membershipPayment.deleteMany();
   await prisma.book.deleteMany();
   await prisma.membership.deleteMany();
+  await prisma.memberProfile.deleteMany();
   await prisma.clubSettings.deleteMany();
   await prisma.session.deleteMany();
   await prisma.account.deleteMany();
@@ -122,11 +132,147 @@ async function main() {
     role: SystemRole.MEMBER,
   });
 
-  await createUserWithMembership({
+  const guest = await createUserWithMembership({
     name: "Mwila Banda",
     email: "guest@bookclub.dev",
     passwordHash: sharedPassword,
     role: SystemRole.GUEST,
+  });
+
+  const submittedApplicant = await createUserWithMembership({
+    name: "Amina Sitali",
+    email: "amina.applicant@bookclub.dev",
+    passwordHash: sharedPassword,
+    role: SystemRole.GUEST,
+    status: MembershipStatus.PENDING,
+  });
+
+  const reviewApplicant = await createUserWithMembership({
+    name: "Tadala Nkonde",
+    email: "tadala.review@bookclub.dev",
+    passwordHash: sharedPassword,
+    role: SystemRole.GUEST,
+    status: MembershipStatus.PENDING,
+  });
+
+  const waitlistedApplicant = await createUserWithMembership({
+    name: "Misozi Lungu",
+    email: "misozi.waitlist@bookclub.dev",
+    passwordHash: sharedPassword,
+    role: SystemRole.GUEST,
+    status: MembershipStatus.PENDING,
+  });
+
+  await prisma.memberProfile.createMany({
+    data: [
+      {
+        userId: admin.id,
+        bio: "Founder of the Sonder reading room, drawn to books that make people linger after the last page.",
+        phoneNumber: "+260 97 555 0142",
+        location: "Lusaka",
+        occupation: "Product strategist",
+        profileImageUrl:
+          "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=600&q=80",
+        favouriteGenres: ["Literary fiction", "African literature", "Memoir"],
+        favouriteBooks: "Homegoing, Open City, The Memory of Love",
+        readingInterests:
+          "Memory, friendship, cities, and the quiet architecture of belonging.",
+        currentlyReadingText: "Tomorrow, and Tomorrow, and Tomorrow",
+        currentlyListeningTitle: "The Moth",
+        currentlyListeningCreator: "The Moth Podcast",
+        currentlyListeningUrl: "https://themoth.org/podcast",
+      },
+      {
+        userId: moderator.id,
+        bio: "Keeps discussions generous, precise, and a little mischievous when the room gets too quiet.",
+        phoneNumber: "+260 96 555 0188",
+        location: "Kabulonga",
+        occupation: "Literature teacher",
+        profileImageUrl:
+          "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=600&q=80",
+        favouriteGenres: ["Speculative fiction", "Poetry", "Short stories"],
+        favouriteBooks: "Beloved, The Left Hand of Darkness, A Mercy",
+        readingInterests:
+          "Worldbuilding, voice, feminist classics, and books that reward rereading.",
+        currentlyReadingText: "Sea of Tranquility",
+        currentlyListeningTitle: "On Being",
+        currentlyListeningCreator: "Krista Tippett",
+        currentlyListeningUrl: "https://onbeing.org/series/podcast/",
+      },
+      {
+        userId: member.id,
+        bio: "A steady highlighter of strange sentences and an enthusiastic recommender of short novels.",
+        phoneNumber: "+260 95 555 0131",
+        location: "Roma",
+        occupation: "Architect",
+        favouriteGenres: ["Science fiction", "Novellas", "Essays"],
+        favouriteBooks: "The Dispossessed, Small Things Like These, Braiding Sweetgrass",
+        readingInterests:
+          "Climate, design, friendship, and books with careful structures.",
+        currentlyReadingText: "The Left Hand of Darkness",
+        currentlyListeningTitle: "Heavyweight",
+        currentlyListeningCreator: "Gimlet",
+        currentlyListeningUrl: "https://gimletmedia.com/shows/heavyweight",
+      },
+      {
+        userId: memberTwo.id,
+        bio: "Usually arrives with a passage marked, a playlist queued, and a question that opens the room.",
+        phoneNumber: "+260 97 555 0194",
+        location: "Woodlands",
+        occupation: "Brand designer",
+        profileImageUrl:
+          "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?auto=format&fit=crop&w=600&q=80",
+        favouriteGenres: ["Historical fiction", "Contemporary romance", "Food writing"],
+        favouriteBooks: "Hamnet, The Vanishing Half, Like Water for Chocolate",
+        readingInterests:
+          "Family stories, sensory writing, migration, and books with memorable meals.",
+        currentlyReadingText: "Tomorrow, and Tomorrow, and Tomorrow",
+        currentlyListeningTitle: "Song Exploder",
+        currentlyListeningCreator: "Hrishikesh Hirway",
+        currentlyListeningUrl: "https://songexploder.net/",
+      },
+      {
+        userId: guest.id,
+        bio: "New to the circle and browsing the shelves before joining the next live discussion.",
+        location: "Longacres",
+        occupation: "Graduate student",
+        favouriteGenres: ["Mystery", "African literature"],
+        favouriteBooks: "The Shadow King, My Sister, the Serial Killer",
+        readingInterests:
+          "Sharp plots, contemporary African writing, and books that move quickly.",
+        currentlyReadingText: "My Sister, the Serial Killer",
+      },
+      {
+        userId: submittedApplicant.id,
+        phoneNumber: "+260 96 555 0211",
+        location: "Lusaka",
+        occupation: "Journalist",
+        favouriteGenres: ["Memoir", "Literary fiction", "Essays"],
+        favouriteBooks: "Stay True, Nervous Conditions, The Year of Magical Thinking",
+        readingInterests:
+          "Personal essays, books about memory, and stories that make ordinary days feel charged.",
+      },
+      {
+        userId: reviewApplicant.id,
+        phoneNumber: "+260 97 555 0212",
+        location: "Kabwe",
+        occupation: "Civil engineer",
+        favouriteGenres: ["Historical fiction", "African literature"],
+        favouriteBooks: "The Old Drift, Homegoing",
+        readingInterests:
+          "Zambian writing, historical fiction, and books that open conversations about place.",
+      },
+      {
+        userId: waitlistedApplicant.id,
+        phoneNumber: "+260 95 555 0213",
+        location: "Ndola",
+        occupation: "Counsellor",
+        favouriteGenres: ["Poetry", "Short stories", "Psychology"],
+        favouriteBooks: "The Prophet, What It Means When a Man Falls from the Sky",
+        readingInterests:
+          "Short forms, reflective nonfiction, and books that help people speak honestly.",
+      },
+    ],
   });
 
   const currentBook = await prisma.book.create({
@@ -135,7 +281,6 @@ async function main() {
       title: "Tomorrow, and Tomorrow, and Tomorrow",
       author: "Gabrielle Zevin",
       genre: "Literary fiction",
-      isbn: "9780593321201",
       pageCount: 416,
       coverUrl:
         "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=900&q=80",
@@ -151,7 +296,6 @@ async function main() {
       title: "Sea of Tranquility",
       author: "Emily St. John Mandel",
       genre: "Speculative fiction",
-      isbn: "9780593321447",
       pageCount: 272,
       summary:
         "A compact, time-bending novel about plague years, memory, and the echoes that travel with us.",
@@ -165,7 +309,6 @@ async function main() {
       title: "The Left Hand of Darkness",
       author: "Ursula K. Le Guin",
       genre: "Science fiction",
-      isbn: "9780441478125",
       pageCount: 304,
       summary:
         "A diplomatic mission unfolds on a world where politics, climate, and gender all unsettle easy assumptions.",
@@ -501,6 +644,213 @@ async function main() {
         voterId: member.id,
       },
     ],
+  });
+
+  const generalPost = await prisma.communityPost.create({
+    data: {
+      authorId: memberTwo.id,
+      postType: CommunityPostType.GENERAL,
+      body: "This week I keep thinking about how friendship changes when people start building things together. What line stayed with everyone else?",
+    },
+  });
+
+  const readingUpdatePost = await prisma.communityPost.create({
+    data: {
+      authorId: admin.id,
+      postType: CommunityPostType.READING_UPDATE,
+      relatedBookId: currentBook.id,
+      body: "I am through the midpoint and the creative partnership is getting thornier in the best way. Logging my progress before Sunday's check-in.",
+      isPinned: true,
+    },
+  });
+
+  const recommendationPost = await prisma.communityPost.create({
+    data: {
+      authorId: moderator.id,
+      postType: CommunityPostType.BOOK_RECOMMENDATION,
+      relatedBookId: backlogBook.id,
+      body: "Recommending this for a shorter speculative month. It has enough tenderness and structure to carry a very good discussion.",
+    },
+  });
+
+  const listeningPost = await prisma.communityPost.create({
+    data: {
+      authorId: member.id,
+      postType: CommunityPostType.CURRENTLY_LISTENING,
+      body: "Pairing this episode with the current read because it keeps circling memory, art, and what collaboration asks from people.",
+      listeningTitle: "Heavyweight",
+      listeningCreator: "Gimlet",
+      listeningUrl: "https://gimletmedia.com/shows/heavyweight",
+    },
+  });
+
+  const chipoWelcomePost = await prisma.communityPost.create({
+    data: {
+      authorId: memberTwo.id,
+      postType: CommunityPostType.NEW_MEMBER_WELCOME,
+      body: "Welcome Chipo Mwanza to Sonder. We are glad to have another reader in the room.",
+      createdAt: addDays(now, -12),
+    },
+  });
+
+  await prisma.membershipApplication.createMany({
+    data: [
+      {
+        applicantUserId: submittedApplicant.id,
+        fullName: "Amina Sitali",
+        normalizedEmail: "amina.applicant@bookclub.dev",
+        email: "amina.applicant@bookclub.dev",
+        phoneNumber: "+260 96 555 0211",
+        location: "Lusaka",
+        occupation: "Journalist",
+        readingInterests:
+          "Personal essays, books about memory, and stories that make ordinary days feel charged.",
+        favouriteGenres: ["Memoir", "Literary fiction", "Essays"],
+        favouriteBooks: "Stay True, Nervous Conditions, The Year of Magical Thinking",
+        reasonForJoining:
+          "I miss being in a room where people take books seriously without making the conversation stiff.",
+        referralSource: "Instagram",
+        acceptedCommunityRules: true,
+        acceptedPrivacyPolicy: true,
+        status: MembershipApplicationStatus.SUBMITTED,
+        submittedAt: addDays(now, -2),
+      },
+      {
+        applicantUserId: reviewApplicant.id,
+        fullName: "Tadala Nkonde",
+        normalizedEmail: "tadala.review@bookclub.dev",
+        email: "tadala.review@bookclub.dev",
+        phoneNumber: "+260 97 555 0212",
+        location: "Kabwe",
+        occupation: "Civil engineer",
+        readingInterests:
+          "Zambian writing, historical fiction, and books that open conversations about place.",
+        favouriteGenres: ["Historical fiction", "African literature"],
+        favouriteBooks: "The Old Drift, Homegoing",
+        reasonForJoining:
+          "I want a consistent reading practice and a community that can help me discover more regional writing.",
+        referralSource: "Friend referral",
+        acceptedCommunityRules: true,
+        acceptedPrivacyPolicy: true,
+        status: MembershipApplicationStatus.UNDER_REVIEW,
+        submittedAt: addDays(now, -5),
+        reviewedAt: addDays(now, -1),
+        reviewedById: moderator.id,
+        reviewNotes:
+          "Thoughtful application. Ask about Saturday availability before approval.",
+      },
+      {
+        applicantUserId: waitlistedApplicant.id,
+        fullName: "Misozi Lungu",
+        normalizedEmail: "misozi.waitlist@bookclub.dev",
+        email: "misozi.waitlist@bookclub.dev",
+        phoneNumber: "+260 95 555 0213",
+        location: "Ndola",
+        occupation: "Counsellor",
+        readingInterests:
+          "Short forms, reflective nonfiction, and books that help people speak honestly.",
+        favouriteGenres: ["Poetry", "Short stories", "Psychology"],
+        favouriteBooks: "The Prophet, What It Means When a Man Falls from the Sky",
+        reasonForJoining:
+          "The club feels like the kind of gentle accountability I need to read beyond work material.",
+        referralSource: "Public event",
+        acceptedCommunityRules: true,
+        acceptedPrivacyPolicy: true,
+        status: MembershipApplicationStatus.WAITLISTED,
+        submittedAt: addDays(now, -10),
+        reviewedAt: addDays(now, -4),
+        reviewedById: admin.id,
+        reviewNotes:
+          "Strong fit, but waitlist until the next intake window opens.",
+      },
+      {
+        applicantUserId: memberTwo.id,
+        fullName: "Chipo Mwanza",
+        normalizedEmail: "chipo@bookclub.dev",
+        email: "chipo@bookclub.dev",
+        phoneNumber: "+260 97 555 0194",
+        location: "Woodlands",
+        occupation: "Brand designer",
+        readingInterests:
+          "Family stories, sensory writing, migration, and books with memorable meals.",
+        favouriteGenres: ["Historical fiction", "Contemporary romance", "Food writing"],
+        favouriteBooks: "Hamnet, The Vanishing Half, Like Water for Chocolate",
+        reasonForJoining:
+          "I wanted a thoughtful local reading rhythm and a group that notices style as much as plot.",
+        referralSource: "Founder invitation",
+        acceptedCommunityRules: true,
+        acceptedPrivacyPolicy: true,
+        status: MembershipApplicationStatus.APPROVED,
+        submittedAt: addDays(now, -21),
+        reviewedAt: addDays(now, -12),
+        reviewedById: admin.id,
+        reviewNotes:
+          "Approved during the community foundation intake. Welcome post linked.",
+        welcomePostId: chipoWelcomePost.id,
+      },
+    ],
+  });
+
+  const firstComment = await prisma.postComment.create({
+    data: {
+      postId: generalPost.id,
+      authorId: moderator.id,
+      body: "The bit about ambition feeling generous and selfish at the same time. I marked it twice.",
+    },
+  });
+
+  await prisma.postComment.create({
+    data: {
+      postId: generalPost.id,
+      authorId: member.id,
+      parentCommentId: firstComment.id,
+      body: "Same. It made the studio scenes feel much less tidy.",
+    },
+  });
+
+  await prisma.postComment.create({
+    data: {
+      postId: recommendationPost.id,
+      authorId: memberTwo.id,
+      body: "I would absolutely read this next. It sounds like a good bridge after the current book.",
+    },
+  });
+
+  await prisma.postReaction.createMany({
+    data: [
+      {
+        postId: generalPost.id,
+        userId: admin.id,
+        reactionType: PostReactionType.MADE_ME_THINK,
+      },
+      {
+        postId: generalPost.id,
+        userId: moderator.id,
+        reactionType: PostReactionType.INSIGHTFUL,
+      },
+      {
+        postId: readingUpdatePost.id,
+        userId: member.id,
+        reactionType: PostReactionType.I_AGREE,
+      },
+      {
+        postId: recommendationPost.id,
+        userId: memberTwo.id,
+        reactionType: PostReactionType.ADDING_TO_MY_LIST,
+      },
+      {
+        postId: listeningPost.id,
+        userId: admin.id,
+        reactionType: PostReactionType.APPLAUSE,
+      },
+    ],
+  });
+
+  await prisma.postBookmark.create({
+    data: {
+      postId: recommendationPost.id,
+      userId: member.id,
+    },
   });
 
   console.log("Seed complete.");

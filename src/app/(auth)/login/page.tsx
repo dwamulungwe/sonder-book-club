@@ -37,9 +37,9 @@ export default async function LoginPage({
         description="Jump straight into the current read, the next discussion, and the club decisions that still need your input."
         footer={
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <span>Need an account?</span>
-            <Link href="/signup" className="font-semibold text-amber-800">
-              Create one
+            <span>Want to join Sonder?</span>
+            <Link href="/join" className="font-semibold text-amber-800">
+              Apply to join
             </Link>
           </div>
         }

@@ -28,5 +28,5 @@ export const clubSettingsSchema = z.object({
 
 export const membershipUpdateSchema = z.object({
   role: z.enum(["ADMIN", "MODERATOR", "MEMBER", "GUEST"]),
-  status: z.enum(["ACTIVE", "SUSPENDED", "LEFT"]),
+  status: z.enum(["PENDING", "ACTIVE", "SUSPENDED", "LEFT"]),
 });

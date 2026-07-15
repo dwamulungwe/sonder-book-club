@@ -9,10 +9,12 @@ import {
   SubscriptionStatus,
 } from "@prisma/client";
 import {
+  AlertTriangle,
   CheckCircle2,
   FilePlus2,
   PauseCircle,
   ReceiptText,
+  RefreshCw,
   Search,
   ShieldCheck,
   XCircle,
@@ -29,11 +31,17 @@ import {
   assignMembershipPlanAction,
   confirmMembershipPaymentAction,
   createMembershipInvoiceAction,
+  markOnlinePaymentAttemptForReviewAction,
   recordMembershipPaymentAction,
+  recheckOnlinePaymentAttemptAction,
   updateSubscriptionStateAction,
   voidMembershipInvoiceAction,
 } from "@/features/billing/actions";
 import { formatMinorUnits } from "@/features/billing/currency";
+import {
+  formatOnlinePaymentAttemptStatus,
+  getOnlinePaymentAttemptsForAdmin,
+} from "@/features/billing/online-payments";
 import { requireBillingAdmin } from "@/features/billing/permissions";
 import {
   ADMIN_BILLING_DETAIL_LIMIT,
@@ -52,6 +60,7 @@ import {
 import {
   formatBillingInterval,
   formatDate,
+  formatDateTime,
   formatInvoiceStatus,
   formatPaymentMethod,
   formatPaymentStatus,
@@ -69,6 +78,9 @@ type BillingAdminPageProps = {
 
 type BillingData = Awaited<ReturnType<typeof getAdminBillingPageData>>;
 type MembershipItem = BillingData["memberships"][number];
+type OnlinePaymentAttemptItem = Awaited<
+  ReturnType<typeof getOnlinePaymentAttemptsForAdmin>
+>[number];
 
 const paymentMethods = [
   PaymentMethod.CASH,
@@ -560,6 +572,192 @@ function MemberBillingCard({
   );
 }
 
+function OnlinePaymentReconciliationSection({
+  attempts,
+  redirectTo,
+}: {
+  attempts: OnlinePaymentAttemptItem[];
+  redirectTo: string;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-stone-950">
+            Online payment reconciliation
+          </h2>
+          <p className="mt-1 text-sm text-stone-600">
+            Flutterwave sandbox attempts awaiting settlement, review, or audit.
+          </p>
+        </div>
+      </div>
+
+      {attempts.length ? (
+        <div className="grid gap-3">
+          {attempts.map((attempt) => (
+            <article
+              key={attempt.id}
+              className="rounded-[1rem] border border-stone-200 bg-white p-4 shadow-sm"
+            >
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="break-all font-semibold text-stone-950">
+                      {attempt.sonderReference}
+                    </p>
+                    <StatusBadge
+                      tone={
+                        attempt.status === "SETTLED"
+                          ? "emerald"
+                          : attempt.status === "REVIEW_REQUIRED"
+                            ? "amber"
+                            : attempt.status === "FAILED" ||
+                                attempt.status === "CANCELLED" ||
+                                attempt.status === "EXPIRED"
+                              ? "rose"
+                              : "sky"
+                      }
+                    >
+                      {formatOnlinePaymentAttemptStatus(attempt.status)}
+                    </StatusBadge>
+                  </div>
+                  <p className="mt-1 text-sm text-stone-600">
+                    {attempt.membership.user.name} -{" "}
+                    {attempt.membership.user.email}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <form action={recheckOnlinePaymentAttemptAction}>
+                    <input type="hidden" name="attemptId" value={attempt.id} />
+                    <input type="hidden" name="redirectTo" value={redirectTo} />
+                    <Button
+                      type="submit"
+                      variant="outline"
+                      className="h-9 gap-2 rounded-lg border-stone-200 bg-white px-3 text-xs text-stone-700 hover:bg-stone-50"
+                    >
+                      <RefreshCw className="size-3.5" />
+                      Recheck
+                    </Button>
+                  </form>
+                  {attempt.status !== "SETTLED" &&
+                  attempt.status !== "REVIEW_REQUIRED" ? (
+                    <form action={markOnlinePaymentAttemptForReviewAction}>
+                      <input type="hidden" name="attemptId" value={attempt.id} />
+                      <input type="hidden" name="redirectTo" value={redirectTo} />
+                      <Button
+                        type="submit"
+                        variant="outline"
+                        className="h-9 gap-2 rounded-lg border-amber-200 bg-amber-50 px-3 text-xs text-amber-900 hover:bg-amber-100"
+                      >
+                        <AlertTriangle className="size-3.5" />
+                        Flag review
+                      </Button>
+                    </form>
+                  ) : null}
+                  <Link
+                    href={`/admin/billing?q=${encodeURIComponent(
+                      attempt.membership.user.email,
+                    )}`}
+                    className="inline-flex h-9 items-center rounded-lg border border-stone-200 bg-white px-3 text-xs font-medium text-stone-700 transition-colors hover:bg-stone-50"
+                  >
+                    Related invoice
+                  </Link>
+                </div>
+              </div>
+
+              <dl className="mt-4 grid gap-3 text-sm text-stone-700 sm:grid-cols-2 xl:grid-cols-4">
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                    Expected amount
+                  </dt>
+                  <dd className="mt-1">
+                    {formatMinorUnits(attempt.amountMinor, attempt.currency)}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                    Invoice
+                  </dt>
+                  <dd className="mt-1">{attempt.invoice.invoiceNumber}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                    Provider status
+                  </dt>
+                  <dd className="mt-1">{attempt.providerStatus ?? "Not known"}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                    Provider transaction
+                  </dt>
+                  <dd className="mt-1 break-all">
+                    {attempt.providerTransactionId ?? "Not known"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                    Created
+                  </dt>
+                  <dd className="mt-1">{formatDateTime(attempt.createdAt)}</dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                    Last checked
+                  </dt>
+                  <dd className="mt-1">
+                    {attempt.lastStatusCheckedAt
+                      ? formatDateTime(attempt.lastStatusCheckedAt)
+                      : "Not checked"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                    Verified
+                  </dt>
+                  <dd className="mt-1">
+                    {attempt.verifiedAt
+                      ? formatDateTime(attempt.verifiedAt)
+                      : "Not verified"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                    Settled
+                  </dt>
+                  <dd className="mt-1">
+                    {attempt.settledAt
+                      ? formatDateTime(attempt.settledAt)
+                      : "Not settled"}
+                  </dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                    Review reason
+                  </dt>
+                  <dd className="mt-1">{attempt.reviewReason ?? "None"}</dd>
+                </div>
+                <div className="sm:col-span-2">
+                  <dt className="text-xs font-semibold uppercase tracking-[0.14em] text-stone-500">
+                    Confirmed payment
+                  </dt>
+                  <dd className="mt-1">
+                    {attempt.settledPayment?.internalReference ?? "Not linked"}
+                  </dd>
+                </div>
+              </dl>
+            </article>
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          title="No online payment attempts"
+          description="Flutterwave checkout attempts will appear here after members start sandbox checkout."
+        />
+      )}
+    </section>
+  );
+}
+
 export default async function BillingAdminPage({
   searchParams,
 }: BillingAdminPageProps) {
@@ -568,14 +766,15 @@ export default async function BillingAdminPage({
   const search = single(params.q)?.trim();
   const subscriptionStatus = parseSubscriptionStatusFilter(params.subscription);
   const invoiceStatus = parseInvoiceStatusFilter(params.invoice);
-  const data = await getAdminBillingPageData(
-    { user, membership },
-    {
+  const adminContext = { user, membership };
+  const [data, onlineAttempts] = await Promise.all([
+    getAdminBillingPageData(adminContext, {
       search,
       subscriptionStatus,
       invoiceStatus,
-    },
-  );
+    }),
+    getOnlinePaymentAttemptsForAdmin(adminContext),
+  ]);
   const redirectTo = billingHref({ search, subscriptionStatus, invoiceStatus });
 
   return (
@@ -663,6 +862,11 @@ export default async function BillingAdminPage({
           </div>
         </form>
       </section>
+
+      <OnlinePaymentReconciliationSection
+        attempts={onlineAttempts}
+        redirectTo={redirectTo}
+      />
 
       <section className="space-y-4">
         {data.memberships.length ? (

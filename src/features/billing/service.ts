@@ -34,7 +34,7 @@ const CURRENT_SUBSCRIPTION_STATUSES: readonly SubscriptionStatus[] = [
   SubscriptionStatus.WAIVED,
 ] as const;
 
-const INVOICE_PAYABLE_STATUSES: readonly InvoiceStatus[] = [
+export const INVOICE_PAYABLE_STATUSES: readonly InvoiceStatus[] = [
   InvoiceStatus.OPEN,
   InvoiceStatus.PARTIALLY_PAID,
   InvoiceStatus.OVERDUE,
@@ -52,7 +52,7 @@ type Tx = Prisma.TransactionClient;
 
 export class BillingError extends Error {}
 
-const BILLING_TRANSACTION_OPTIONS = {
+export const BILLING_TRANSACTION_OPTIONS = {
   isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
   maxWait: 10_000,
   timeout: 20_000,
@@ -123,7 +123,7 @@ function isRetryableBillingTransactionError(error: unknown) {
   );
 }
 
-async function runBillingTransaction<T>(
+export async function runBillingTransaction<T>(
   operation: (tx: Tx) => Promise<T>,
   retryCount = BILLING_TRANSACTION_RETRY_COUNT,
 ) {

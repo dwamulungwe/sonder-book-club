@@ -4,20 +4,28 @@ import { canManageBilling } from "@/lib/permissions";
 import { requireMembershipContext } from "@/lib/session";
 
 export async function requireBillingAdmin(redirectTo: string) {
-  const { user, membership } = await requireMembershipContext();
+  const { user } = await requireMembershipContext();
   const activeUser = await db.user.findUnique({
     where: {
       id: user.id,
     },
     select: {
+      id: true,
+      systemRole: true,
       deletedAt: true,
+      membership: {
+        select: {
+          role: true,
+          status: true,
+        },
+      },
     },
   });
 
   if (
     !activeUser ||
     activeUser.deletedAt ||
-    !canManageBilling(user, membership)
+    !canManageBilling(activeUser, activeUser.membership)
   ) {
     redirectWithNotice(
       redirectTo,
@@ -26,5 +34,11 @@ export async function requireBillingAdmin(redirectTo: string) {
     );
   }
 
-  return { user, membership };
+  return {
+    user: {
+      id: activeUser.id,
+      systemRole: activeUser.systemRole,
+    },
+    membership: activeUser.membership,
+  };
 }

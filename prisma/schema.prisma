@@ -125,6 +125,7 @@ enum NotificationType {
   PAYMENT_RECORDED
   PAYMENT_CONFIRMED
   PAYMENT_FAILED
+  ONLINE_PAYMENT_REVIEW_REQUIRED
   SUBSCRIPTION_PAST_DUE
   SUBSCRIPTION_WAIVED
 }
@@ -197,6 +198,30 @@ enum InvoiceStatus {
   OVERDUE
 }
 
+enum OnlinePaymentProvider {
+  FLUTTERWAVE
+}
+
+enum OnlinePaymentAttemptStatus {
+  CREATED
+  CHECKOUT_READY
+  PROCESSING
+  VERIFIED
+  SETTLED
+  FAILED
+  CANCELLED
+  EXPIRED
+  REVIEW_REQUIRED
+}
+
+enum ProviderWebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  DUPLICATE
+  FAILED
+  IGNORED
+}
+
 model User {
   id                     String                  @id @default(cuid())
   name                   String
@@ -263,17 +288,18 @@ model ClubSettings {
 }
 
 model Membership {
-  id            String               @id @default(cuid())
-  userId        String               @unique
-  role          SystemRole           @default(MEMBER)
-  status        MembershipStatus     @default(ACTIVE)
-  joinedAt      DateTime             @default(now())
-  payments      MembershipPayment[]
-  subscriptions MemberSubscription[]
-  invoices      MembershipInvoice[]
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
-  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    String                 @id @default(cuid())
+  userId                String                 @unique
+  role                  SystemRole             @default(MEMBER)
+  status                MembershipStatus       @default(ACTIVE)
+  joinedAt              DateTime               @default(now())
+  payments              MembershipPayment[]
+  onlinePaymentAttempts OnlinePaymentAttempt[]
+  subscriptions         MemberSubscription[]
+  invoices              MembershipInvoice[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  user                  User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([role, status])
@@ -783,31 +809,32 @@ model PollVote {
 }
 
 model MembershipPayment {
-  id                String             @id @default(cuid())
-  membershipId      String
-  invoiceId         String?
-  amountMinor       BigInt
-  currency          String             @default("ZMW") @db.VarChar(3)
-  status            PaymentStatus      @default(PENDING)
-  method            PaymentMethod?
-  externalReference String?            @map("reference")
-  internalReference String             @unique @db.VarChar(80)
-  dueAt             DateTime?
-  paidAt            DateTime?
-  confirmedAt       DateTime?
-  confirmedById     String?
-  periodStart       DateTime?
-  periodEnd         DateTime?
-  notes             String?
-  recordedById      String?
-  idempotencyKey    String?            @unique @db.VarChar(160)
-  deletedAt         DateTime?
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  membership        Membership         @relation(fields: [membershipId], references: [id], onDelete: Restrict)
-  invoice           MembershipInvoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
-  recordedBy        User?              @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
-  confirmedBy       User?              @relation("PaymentConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
+  id                   String                @id @default(cuid())
+  membershipId         String
+  invoiceId            String?
+  amountMinor          BigInt
+  currency             String                @default("ZMW") @db.VarChar(3)
+  status               PaymentStatus         @default(PENDING)
+  method               PaymentMethod?
+  externalReference    String?               @map("reference")
+  internalReference    String                @unique @db.VarChar(80)
+  dueAt                DateTime?
+  paidAt               DateTime?
+  confirmedAt          DateTime?
+  confirmedById        String?
+  periodStart          DateTime?
+  periodEnd            DateTime?
+  notes                String?
+  recordedById         String?
+  idempotencyKey       String?               @unique @db.VarChar(160)
+  deletedAt            DateTime?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  membership           Membership            @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  invoice              MembershipInvoice?    @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  recordedBy           User?                 @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  confirmedBy          User?                 @relation("PaymentConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
+  onlinePaymentAttempt OnlinePaymentAttempt?
 
   @@index([membershipId, periodStart, periodEnd])
   @@index([externalReference])
@@ -867,27 +894,28 @@ model MemberSubscription {
 }
 
 model MembershipInvoice {
-  id              String              @id @default(cuid())
-  membershipId    String
-  subscriptionId  String?
-  invoiceNumber   String              @unique @db.VarChar(40)
-  status          InvoiceStatus       @default(OPEN)
-  description     String              @db.VarChar(240)
-  amountDueMinor  BigInt
-  amountPaidMinor BigInt              @default(0)
-  currency        String              @default("ZMW") @db.VarChar(3)
-  periodStart     DateTime?
-  periodEnd       DateTime?
-  dueAt           DateTime
-  paidAt          DateTime?
-  voidedAt        DateTime?
-  createdById     String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  membership      Membership          @relation(fields: [membershipId], references: [id], onDelete: Restrict)
-  subscription    MemberSubscription? @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
-  createdBy       User?               @relation("InvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
-  payments        MembershipPayment[]
+  id                    String                 @id @default(cuid())
+  membershipId          String
+  subscriptionId        String?
+  invoiceNumber         String                 @unique @db.VarChar(40)
+  status                InvoiceStatus          @default(OPEN)
+  description           String                 @db.VarChar(240)
+  amountDueMinor        BigInt
+  amountPaidMinor       BigInt                 @default(0)
+  currency              String                 @default("ZMW") @db.VarChar(3)
+  periodStart           DateTime?
+  periodEnd             DateTime?
+  dueAt                 DateTime
+  paidAt                DateTime?
+  voidedAt              DateTime?
+  createdById           String?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  membership            Membership             @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  subscription          MemberSubscription?    @relation(fields: [subscriptionId], references: [id], onDelete: SetNull)
+  createdBy             User?                  @relation("InvoiceCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  payments              MembershipPayment[]
+  onlinePaymentAttempts OnlinePaymentAttempt[]
 
   @@index([membershipId, status])
   @@index([status, dueAt])
@@ -895,6 +923,70 @@ model MembershipInvoice {
   @@index([subscriptionId, periodStart, periodEnd])
   @@index([createdById])
   @@map("membership_invoices")
+}
+
+model OnlinePaymentAttempt {
+  id                     String                     @id @default(cuid())
+  provider               OnlinePaymentProvider
+  sonderReference        String                     @unique @db.VarChar(80)
+  membershipId           String
+  invoiceId              String
+  amountMinor            BigInt
+  currency               String                     @db.VarChar(3)
+  status                 OnlinePaymentAttemptStatus @default(CREATED)
+  providerTransactionId  String?                    @db.VarChar(120)
+  providerReference      String?                    @db.VarChar(160)
+  providerCheckoutId     String?                    @db.VarChar(160)
+  checkoutUrl            String?                    @db.VarChar(1000)
+  checkoutExpiresAt      DateTime?
+  checkoutIdempotencyKey String?                    @unique @db.VarChar(128)
+  settledPaymentId       String?                    @unique
+  failureReason          String?                    @db.VarChar(120)
+  reviewReason           String?                    @db.VarChar(120)
+  providerStatus         String?                    @db.VarChar(80)
+  verifiedAt             DateTime?
+  settledAt              DateTime?
+  lastStatusCheckedAt    DateTime?
+  sanitizedStatus        Json?
+  createdAt              DateTime                   @default(now())
+  updatedAt              DateTime                   @updatedAt
+  membership             Membership                 @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  invoice                MembershipInvoice          @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  settledPayment         MembershipPayment?         @relation(fields: [settledPaymentId], references: [id], onDelete: Restrict)
+  webhookEvents          ProviderWebhookEvent[]
+
+  @@index([membershipId, status, createdAt])
+  @@index([invoiceId, status, createdAt])
+  @@index([provider, status, lastStatusCheckedAt])
+  @@index([providerTransactionId])
+  @@index([settledPaymentId])
+  @@map("online_payment_attempts")
+}
+
+model ProviderWebhookEvent {
+  id                    String                     @id @default(cuid())
+  provider              OnlinePaymentProvider
+  eventKey              String                     @db.VarChar(160)
+  providerEventId       String?                    @db.VarChar(160)
+  eventType             String?                    @db.VarChar(120)
+  providerTransactionId String?                    @db.VarChar(120)
+  sonderReference       String?                    @db.VarChar(80)
+  payloadHash           String                     @db.VarChar(64)
+  status                ProviderWebhookEventStatus @default(RECEIVED)
+  failureReason         String?                    @db.VarChar(120)
+  attemptId             String?
+  receivedAt            DateTime                   @default(now())
+  processedAt           DateTime?
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  attempt               OnlinePaymentAttempt?      @relation(fields: [attemptId], references: [id], onDelete: SetNull)
+
+  @@unique([provider, eventKey])
+  @@index([provider, status, receivedAt])
+  @@index([providerTransactionId])
+  @@index([sonderReference])
+  @@index([attemptId])
+  @@map("provider_webhook_events")
 }
 
 model Account {

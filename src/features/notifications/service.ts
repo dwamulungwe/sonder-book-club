@@ -943,6 +943,65 @@ export async function notifyPaymentFailed(
   });
 }
 
+export async function notifyOnlinePaymentReviewRequired(
+  tx: Prisma.TransactionClient,
+  input: {
+    attemptId: string;
+    invoiceId: string;
+    sonderReference: string;
+    reason: string;
+  },
+) {
+  const admins = await tx.membership.findMany({
+    where: {
+      status: MembershipStatus.ACTIVE,
+      OR: [
+        {
+          role: SystemRole.ADMIN,
+        },
+        {
+          user: {
+            systemRole: SystemRole.ADMIN,
+          },
+        },
+      ],
+      user: {
+        deletedAt: null,
+      },
+    },
+    include: {
+      user: {
+        include: {
+          notificationPreference: true,
+        },
+      },
+    },
+    take: ACTIVE_MEMBER_NOTIFICATION_BATCH_SIZE,
+  });
+
+  return createNotifications(
+    tx,
+    admins.map(({ user }) => ({
+      recipient: user,
+      type: NotificationType.ONLINE_PAYMENT_REVIEW_REQUIRED,
+      title: "Online payment needs review",
+      message: `Flutterwave payment ${input.sonderReference} requires admin review.`,
+      href: "/admin/billing",
+      entityType: "online_payment_attempt",
+      entityId: input.attemptId,
+      dedupeKey: notificationDedupeKey(
+        "notification",
+        "online_payment_review",
+        input.attemptId,
+        input.reason,
+        user.id,
+      ),
+      preference: "billing" as const,
+      inAppDelivery: "transactional" as const,
+    })),
+  );
+}
+
 export async function notifySubscriptionPastDue(
   tx: Prisma.TransactionClient,
   input: {

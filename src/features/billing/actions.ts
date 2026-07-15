@@ -1,8 +1,14 @@
 "use server";
 
 import { Prisma } from "@prisma/client";
+import { redirect } from "next/navigation";
 
 import { parseMinorUnits } from "@/features/billing/currency";
+import {
+  checkOnlinePaymentAttemptStatus,
+  createOnlineCheckoutForMember,
+  markOnlinePaymentAttemptForReview,
+} from "@/features/billing/online-payments";
 import { requireBillingAdmin } from "@/features/billing/permissions";
 import {
   assignPlanSchema,
@@ -30,6 +36,7 @@ import {
   getString,
 } from "@/lib/form-data";
 import { redirectWithNotice, resolveReturnPath } from "@/lib/navigation";
+import { requireSessionUser } from "@/lib/session";
 
 function firstIssueMessage(error: { issues: Array<{ message: string }> }) {
   return error.issues[0]?.message ?? "Check the form and try again.";
@@ -313,4 +320,98 @@ export async function updateSubscriptionStateAction(formData: FormData) {
   }
 
   redirectWithNotice(redirectTo, "success", "Subscription updated.");
+}
+
+export async function startOnlineCheckoutAction(formData: FormData) {
+  const redirectTo = resolveReturnPath(formData, "/membership/billing");
+  const user = await requireSessionUser();
+  const invoiceId = getString(formData, "invoiceId");
+
+  if (!invoiceId) {
+    redirectWithNotice(redirectTo, "error", "Invoice is required.");
+  }
+
+  let checkoutUrl: string | null = null;
+
+  try {
+    const result = await createOnlineCheckoutForMember({
+      userId: user.id,
+      invoiceId,
+      checkoutNonce: getOptionalString(formData, "checkoutNonce"),
+    });
+    checkoutUrl = result.checkoutUrl;
+  } catch (error) {
+    redirectForBillingError(
+      redirectTo,
+      error,
+      "Online checkout could not be started.",
+    );
+  }
+
+  if (!checkoutUrl) {
+    redirectWithNotice(
+      redirectTo,
+      "error",
+      "Online checkout could not be started.",
+    );
+  }
+
+  redirect(checkoutUrl);
+}
+
+export async function recheckOnlinePaymentAttemptAction(formData: FormData) {
+  const redirectTo = resolveReturnPath(formData, "/admin/billing");
+  const { user, membership } = await requireBillingAdmin(redirectTo);
+  const attemptId = getString(formData, "attemptId");
+
+  if (!attemptId) {
+    redirectWithNotice(redirectTo, "error", "Online payment attempt is required.");
+  }
+
+  try {
+    await checkOnlinePaymentAttemptStatus({
+      attemptId,
+      adminContext: {
+        user,
+        membership,
+      },
+      force: true,
+    });
+  } catch (error) {
+    redirectForBillingError(
+      redirectTo,
+      error,
+      "Unable to recheck the provider status.",
+    );
+  }
+
+  redirectWithNotice(redirectTo, "success", "Online payment status checked.");
+}
+
+export async function markOnlinePaymentAttemptForReviewAction(formData: FormData) {
+  const redirectTo = resolveReturnPath(formData, "/admin/billing");
+  const { user, membership } = await requireBillingAdmin(redirectTo);
+  const attemptId = getString(formData, "attemptId");
+
+  if (!attemptId) {
+    redirectWithNotice(redirectTo, "error", "Online payment attempt is required.");
+  }
+
+  try {
+    await markOnlinePaymentAttemptForReview({
+      attemptId,
+      actor: {
+        user,
+        membership,
+      },
+    });
+  } catch (error) {
+    redirectForBillingError(
+      redirectTo,
+      error,
+      "Unable to flag the payment attempt for review.",
+    );
+  }
+
+  redirectWithNotice(redirectTo, "success", "Online payment flagged for review.");
 }

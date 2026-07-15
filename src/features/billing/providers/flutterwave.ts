@@ -551,13 +551,12 @@ async function parseWebhook(
   const hash = payloadHash(input.rawBody);
   const providerEventId = asString(root.id);
   const eventKey = providerEventId
-    ? `event:${providerEventId}:${hash}`
+    ? `event:${providerEventId}`
     : [
         "event",
         eventType ?? "unknown",
         transactionId ?? "no_transaction",
         sonderReference ?? "no_reference",
-        hash,
       ].join(":");
   const currency = asString(data.currency)?.trim().toUpperCase();
   const amountMinor =

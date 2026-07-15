@@ -262,7 +262,7 @@ async function getActiveMemberForCheckout(
   if (
     !membership ||
     membership.status !== MembershipStatus.ACTIVE ||
-    membership.role === SystemRole.GUEST ||
+    membership.role !== SystemRole.MEMBER ||
     membership.user.deletedAt
   ) {
     throw new BillingError("Only active members can pay online.");

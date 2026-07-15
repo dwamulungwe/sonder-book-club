@@ -348,7 +348,7 @@ test("webhook parser extracts sanitized successful transaction fields", async ()
   assert.match(parsed.data.payloadHash ?? "", /^[a-f0-9]{64}$/);
 });
 
-test("webhook event keys dedupe identical payloads but allow changed payloads", async () => {
+test("webhook event keys do not rely on mutable status fields", async () => {
   process.env.FLUTTERWAVE_MODE = "test";
   Object.assign(process.env, { NODE_ENV: "test" });
   process.env.FLUTTERWAVE_SECRET_KEY = "unit-test-secret";
@@ -398,7 +398,8 @@ test("webhook event keys dedupe identical payloads but allow changed payloads", 
 
   if (first.status === "ok" && duplicate.status === "ok" && changed.status === "ok") {
     assert.equal(first.data.eventKey, duplicate.data.eventKey);
-    assert.notEqual(first.data.eventKey, changed.data.eventKey);
+    assert.equal(first.data.eventKey, changed.data.eventKey);
+    assert.notEqual(first.data.payloadHash, changed.data.payloadHash);
   }
 });
 

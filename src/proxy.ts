@@ -13,6 +13,7 @@ const protectedPrefixes = [
   "/voting",
   "/announcements",
   "/members",
+  "/membership",
   "/notifications",
   "/profile",
   "/settings",

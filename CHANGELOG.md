@@ -6,6 +6,8 @@ All notable changes to Sonder Book Club are documented in this file.
 
 ### Changed
 
+- Added the v0.3 membership billing and subscription foundation with integer minor-unit money storage, membership plans, member subscriptions, invoices, evolved membership payments, ADMIN-only billing operations, member billing history, transactional billing notifications, and a disabled payment-provider abstraction prepared for a future provider adapter.
+- Documented Flutterwave as Sonder's selected future online payment provider while preserving provider-independent billing boundaries and keeping manual/offline payment recording as the only operational workflow in this slice; live online payments, provider webhooks, scheduled invoice generation, PDF receipts, and full accounting remain deferred.
 - Added the v0.2 in-app notifications and provider-independent email outbox foundation with notification preferences, transactional application-status email jobs, community/announcement/meeting integrations, protected notification settings, and an ADMIN-only outbox review page.
 - Documented that no live email provider or scheduled delivery processor is configured yet; outbox records are not considered sent without provider confirmation.
 - Added the membership application and onboarding workflow with a public Join page, signed-in application status page, moderator/admin review queue, approval transactions, and idempotent community welcome posts.
@@ -18,6 +20,7 @@ All notable changes to Sonder Book Club are documented in this file.
 
 ### Database
 
+- Added `20260714_membership_billing_subscription_foundation` to create billing interval, subscription status, and invoice status enums; add membership plans, subscriptions, and invoices; backfill `membership_payments.amountMinor` from the legacy decimal amount; add payment confirmation/idempotency fields; enforce key billing indexes and check constraints; and extend billing notifications/preferences.
 - Added `20260714_notifications_email_outbox` to create notification and email outbox enums, notification records, user notification preferences, unique dedupe keys, audit-preserving relations, and indexes for unread/recent notification and outbox processing queries.
 - Added `20260714_membership_applications_onboarding` to create membership application statuses and records, add pending memberships, add new-member welcome posts, and protect unresolved application emails with a partial unique index.
 - Added `20260713_community_feed_foundation` to create community posts, comments, reactions, bookmarks, and content reports.

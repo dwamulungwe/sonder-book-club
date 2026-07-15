@@ -9,7 +9,13 @@ export type EmailTemplateKey =
   | "community_comment"
   | "community_reply"
   | "announcement_published"
-  | "meeting_updated";
+  | "meeting_updated"
+  | "invoice_created"
+  | "payment_recorded"
+  | "payment_confirmed"
+  | "payment_failed"
+  | "subscription_past_due"
+  | "subscription_waived";
 
 export type EmailTemplateData = {
   recipientName?: string | null;
@@ -24,6 +30,11 @@ export type EmailTemplateData = {
   profileHref?: string | null;
   announcementHref?: string | null;
   meetingHref?: string | null;
+  billingHref?: string | null;
+  invoiceNumber?: string | null;
+  amountFormatted?: string | null;
+  paymentReference?: string | null;
+  planName?: string | null;
 };
 
 export type RenderedEmailTemplate = {
@@ -92,6 +103,11 @@ export function renderEmailTemplate(
   const profileHref = cleanText(data.profileHref, "/profile");
   const announcementHref = cleanText(data.announcementHref, "/announcements");
   const meetingHref = cleanText(data.meetingHref, "/meetings");
+  const billingHref = cleanText(data.billingHref, "/membership/billing");
+  const invoiceNumber = truncate(cleanText(data.invoiceNumber, "membership invoice"), 80);
+  const amountFormatted = cleanText(data.amountFormatted, "the recorded amount");
+  const paymentReference = truncate(cleanText(data.paymentReference, "payment reference pending"), 80);
+  const planName = truncate(cleanText(data.planName, "membership plan"), 120);
   const announcementTitle = truncate(
     cleanText(data.announcementTitle, "New Sonder announcement"),
     120,
@@ -214,6 +230,101 @@ export function renderEmailTemplate(
           meetingTitle,
           meetingStartsAt: meetingTime,
           meetingLocation,
+        },
+      );
+    case "invoice_created":
+      return render(
+        templateKey,
+        `Sonder invoice ${invoiceNumber}`,
+        [
+          greeting(recipientName),
+          `A Sonder membership invoice has been created for ${amountFormatted}.`,
+          `Invoice: ${invoiceNumber}`,
+          `Open billing in Sonder: ${billingHref}`,
+        ],
+        {
+          billingHref,
+          invoiceNumber,
+          amountFormatted,
+        },
+      );
+    case "payment_recorded":
+      return render(
+        templateKey,
+        "Sonder payment recorded",
+        [
+          greeting(recipientName),
+          `A membership payment for ${amountFormatted} has been recorded and is awaiting confirmation.`,
+          `Reference: ${paymentReference}`,
+          invoiceNumber ? `Invoice: ${invoiceNumber}` : "Invoice: not linked",
+          `Open billing in Sonder: ${billingHref}`,
+        ],
+        {
+          billingHref,
+          invoiceNumber,
+          amountFormatted,
+          paymentReference,
+        },
+      );
+    case "payment_confirmed":
+      return render(
+        templateKey,
+        "Sonder payment confirmed",
+        [
+          greeting(recipientName),
+          `Your membership payment for ${amountFormatted} has been confirmed.`,
+          `Reference: ${paymentReference}`,
+          invoiceNumber ? `Invoice: ${invoiceNumber}` : "Invoice: not linked",
+          `Open billing in Sonder: ${billingHref}`,
+        ],
+        {
+          billingHref,
+          invoiceNumber,
+          amountFormatted,
+          paymentReference,
+        },
+      );
+    case "payment_failed":
+      return render(
+        templateKey,
+        "Sonder payment could not be confirmed",
+        [
+          greeting(recipientName),
+          `A membership payment for ${amountFormatted} could not be confirmed.`,
+          invoiceNumber ? `Invoice: ${invoiceNumber}` : "Invoice: not linked",
+          `Open billing in Sonder: ${billingHref}`,
+        ],
+        {
+          billingHref,
+          invoiceNumber,
+          amountFormatted,
+        },
+      );
+    case "subscription_past_due":
+      return render(
+        templateKey,
+        "Sonder membership past due",
+        [
+          greeting(recipientName),
+          "Your Sonder membership has an overdue invoice.",
+          `Open billing in Sonder: ${billingHref}`,
+        ],
+        {
+          billingHref,
+        },
+      );
+    case "subscription_waived":
+      return render(
+        templateKey,
+        "Sonder membership dues waived",
+        [
+          greeting(recipientName),
+          `Your ${planName} membership dues are waived.`,
+          `Open billing in Sonder: ${billingHref}`,
+        ],
+        {
+          billingHref,
+          planName,
         },
       );
   }

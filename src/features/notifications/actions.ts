@@ -82,19 +82,23 @@ export async function updateNotificationPreferencesAction(formData: FormData) {
       inAppCommunityActivity: getCheckbox(formData, "inAppCommunityActivity"),
       inAppAnnouncements: getCheckbox(formData, "inAppAnnouncements"),
       inAppApplicationUpdates: true,
+      inAppBillingUpdates: true,
       emailCommunityActivity: getCheckbox(formData, "emailCommunityActivity"),
       emailAnnouncements: getCheckbox(formData, "emailAnnouncements"),
       emailApplicationUpdates: true,
       emailMeetingUpdates: getCheckbox(formData, "emailMeetingUpdates"),
+      emailBillingUpdates: true,
     },
     update: {
       inAppCommunityActivity: getCheckbox(formData, "inAppCommunityActivity"),
       inAppAnnouncements: getCheckbox(formData, "inAppAnnouncements"),
       inAppApplicationUpdates: true,
+      inAppBillingUpdates: true,
       emailCommunityActivity: getCheckbox(formData, "emailCommunityActivity"),
       emailAnnouncements: getCheckbox(formData, "emailAnnouncements"),
       emailApplicationUpdates: true,
       emailMeetingUpdates: getCheckbox(formData, "emailMeetingUpdates"),
+      emailBillingUpdates: true,
     },
   });
 

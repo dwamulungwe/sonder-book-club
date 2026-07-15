@@ -6,6 +6,8 @@ import {
 } from "@prisma/client";
 import { z } from "zod";
 
+import { isSupportedBillingCurrencyCode } from "@/features/billing/currency";
+
 export const membershipPlanSchema = z.object({
   planId: z.string().optional(),
   name: z
@@ -21,7 +23,11 @@ export const membershipPlanSchema = z.object({
     .string()
     .trim()
     .toUpperCase()
-    .regex(/^[A-Z]{3}$/, "Currency must be a three-letter ISO code."),
+    .regex(/^[A-Z]{3}$/, "Currency must be a three-letter ISO code.")
+    .refine(
+      (currency) => isSupportedBillingCurrencyCode(currency),
+      "Only ZMW is currently supported for billing.",
+    ),
   billingInterval: z.enum([
     BillingInterval.MONTHLY,
     BillingInterval.QUARTERLY,

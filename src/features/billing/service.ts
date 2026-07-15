@@ -52,6 +52,28 @@ type Tx = Prisma.TransactionClient;
 
 export class BillingError extends Error {}
 
+const BILLING_TRANSACTION_OPTIONS = {
+  isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+  maxWait: 10_000,
+  timeout: 20_000,
+};
+const BILLING_TRANSACTION_RETRY_COUNT = 2;
+
+const BILLING_USER_SELECT = {
+  id: true,
+  email: true,
+  name: true,
+  deletedAt: true,
+  notificationPreference: true,
+} satisfies Prisma.UserSelect;
+
+const BILLING_RECIPIENT_SELECT = {
+  id: true,
+  email: true,
+  name: true,
+  notificationPreference: true,
+} satisfies Prisma.UserSelect;
+
 export type MembershipPlanInput = {
   planId?: string;
   name: string;
@@ -77,6 +99,47 @@ export type RecordPaymentInput = {
   recordedById: string;
   idempotencyKey?: string | null;
 };
+
+function isRetryableBillingTransactionError(error: unknown) {
+  if (error instanceof BillingError) {
+    return false;
+  }
+
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return false;
+  }
+
+  if (error.code === "P2034") {
+    return true;
+  }
+
+  const details = `${error.message} ${JSON.stringify(error.meta ?? {})}`
+    .toLowerCase();
+
+  return (
+    details.includes("deadlock") ||
+    details.includes("could not serialize") ||
+    details.includes("serialization failure")
+  );
+}
+
+async function runBillingTransaction<T>(
+  operation: (tx: Tx) => Promise<T>,
+  retryCount = BILLING_TRANSACTION_RETRY_COUNT,
+) {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await db.$transaction(operation, BILLING_TRANSACTION_OPTIONS);
+    } catch (error) {
+      if (
+        attempt >= retryCount ||
+        !isRetryableBillingTransactionError(error)
+      ) {
+        throw error;
+      }
+    }
+  }
+}
 
 function addDays(date: Date, days: number) {
   const next = new Date(date);
@@ -173,6 +236,8 @@ function scopedPaymentIdempotencyKey(input: {
     return null;
   }
 
+  // The browser contributes only a submission nonce. Sonder derives the trust
+  // boundary from server-validated membership and invoice identifiers.
   return `manual:${stableDigest(
     input.membershipId,
     input.invoiceId ?? "standalone",
@@ -242,12 +307,7 @@ async function getMembershipForBilling(tx: Tx, membershipId: string) {
     },
     include: {
       user: {
-        select: {
-          id: true,
-          email: true,
-          name: true,
-          deletedAt: true,
-        },
+        select: BILLING_USER_SELECT,
       },
     },
   });
@@ -271,7 +331,7 @@ export async function createOrUpdateMembershipPlan(input: MembershipPlanInput) {
     throw new BillingError("Only active plans can be the default plan.");
   }
 
-  return db.$transaction(
+  return runBillingTransaction(
     async (tx) => {
       if (input.isDefault) {
         await tx.membershipPlan.updateMany({
@@ -317,9 +377,6 @@ export async function createOrUpdateMembershipPlan(input: MembershipPlanInput) {
         },
       });
     },
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    },
   );
 }
 
@@ -331,7 +388,7 @@ export async function assignPlanToMembership(input: {
 }) {
   const now = input.startedAt ?? new Date();
 
-  return db.$transaction(
+  return runBillingTransaction(
     async (tx) => {
       await getMembershipForBilling(tx, input.membershipId);
 
@@ -396,9 +453,6 @@ export async function assignPlanToMembership(input: {
         },
       });
     },
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    },
   );
 }
 
@@ -418,12 +472,7 @@ async function createInvoiceForSubscriptionPeriodInTx(
       membership: {
         include: {
           user: {
-            select: {
-              id: true,
-              email: true,
-              name: true,
-              deletedAt: true,
-            },
+            select: BILLING_USER_SELECT,
           },
         },
       },
@@ -494,11 +543,8 @@ export async function createInvoiceForSubscriptionPeriod(input: {
   subscriptionId: string;
   createdById?: string | null;
 }) {
-  return db.$transaction(
-    (tx) => createInvoiceForSubscriptionPeriodInTx(tx, input),
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    },
+  return runBillingTransaction((tx) =>
+    createInvoiceForSubscriptionPeriodInTx(tx, input),
   );
 }
 
@@ -506,7 +552,7 @@ export async function createInvoiceForMembershipCurrentPeriod(input: {
   membershipId: string;
   createdById: string;
 }) {
-  return db.$transaction(
+  return runBillingTransaction(
     async (tx) => {
       await getMembershipForBilling(tx, input.membershipId);
 
@@ -531,9 +577,6 @@ export async function createInvoiceForMembershipCurrentPeriod(input: {
         createdById: input.createdById,
       });
     },
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    },
   );
 }
 
@@ -542,7 +585,7 @@ export async function recordPayment(input: RecordPaymentInput) {
   const paidAt = input.paidAt ?? new Date();
   const idempotencyKey = scopedPaymentIdempotencyKey(input);
 
-  return db.$transaction(
+  return runBillingTransaction(
     async (tx) => {
       if (idempotencyKey) {
         const existing = await tx.membershipPayment.findUnique({
@@ -639,9 +682,6 @@ export async function recordPayment(input: RecordPaymentInput) {
 
       return payment;
     },
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    },
   );
 }
 
@@ -651,7 +691,7 @@ export async function confirmPayment(input: {
 }) {
   const now = new Date();
 
-  return db.$transaction(
+  return runBillingTransaction(
     async (tx) => {
       const payment = await tx.membershipPayment.findUnique({
         where: {
@@ -662,11 +702,7 @@ export async function confirmPayment(input: {
           membership: {
             include: {
               user: {
-                select: {
-                  id: true,
-                  email: true,
-                  name: true,
-                },
+                select: BILLING_RECIPIENT_SELECT,
               },
             },
           },
@@ -789,9 +825,6 @@ export async function confirmPayment(input: {
 
       return confirmedPayment;
     },
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-    },
   );
 }
 
@@ -799,7 +832,7 @@ export async function markPaymentFailed(input: {
   paymentId: string;
   actorId: string;
 }) {
-  return db.$transaction(
+  return runBillingTransaction(
     async (tx) => {
       const payment = await tx.membershipPayment.findUnique({
         where: {
@@ -809,11 +842,7 @@ export async function markPaymentFailed(input: {
           membership: {
             include: {
               user: {
-                select: {
-                  id: true,
-                  email: true,
-                  name: true,
-                },
+                select: BILLING_RECIPIENT_SELECT,
               },
             },
           },
@@ -847,9 +876,6 @@ export async function markPaymentFailed(input: {
       });
 
       return updated;
-    },
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     },
   );
 }
@@ -889,7 +915,7 @@ export async function updateSubscriptionState(input: {
 }) {
   const now = new Date();
 
-  return db.$transaction(
+  return runBillingTransaction(
     async (tx) => {
       const subscription = await tx.memberSubscription.findUnique({
         where: {
@@ -899,11 +925,7 @@ export async function updateSubscriptionState(input: {
           membership: {
             include: {
               user: {
-                select: {
-                  id: true,
-                  email: true,
-                  name: true,
-                },
+                select: BILLING_RECIPIENT_SELECT,
               },
             },
           },
@@ -959,9 +981,6 @@ export async function updateSubscriptionState(input: {
       }
 
       return updated;
-    },
-    {
-      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     },
   );
 }

@@ -790,7 +790,7 @@ model MembershipPayment {
   currency          String             @default("ZMW") @db.VarChar(3)
   status            PaymentStatus      @default(PENDING)
   method            PaymentMethod?
-  externalReference String?            @unique @map("reference")
+  externalReference String?            @map("reference")
   internalReference String             @unique @db.VarChar(80)
   dueAt             DateTime?
   paidAt            DateTime?
@@ -809,7 +809,8 @@ model MembershipPayment {
   recordedBy        User?              @relation("PaymentRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
   confirmedBy       User?              @relation("PaymentConfirmer", fields: [confirmedById], references: [id], onDelete: SetNull)
 
-  @@unique([membershipId, periodStart, periodEnd])
+  @@index([membershipId, periodStart, periodEnd])
+  @@index([externalReference])
   @@index([membershipId, status])
   @@index([invoiceId, status])
   @@index([dueAt, status])

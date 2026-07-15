@@ -1,4 +1,9 @@
-const MINOR_UNITS_BY_CURRENCY: Record<string, number> = {
+export const SUPPORTED_BILLING_CURRENCIES = ["ZMW"] as const;
+
+export type SupportedBillingCurrency =
+  (typeof SUPPORTED_BILLING_CURRENCIES)[number];
+
+const MINOR_UNITS_BY_CURRENCY: Record<SupportedBillingCurrency, number> = {
   ZMW: 2,
 };
 
@@ -8,7 +13,9 @@ function getMinorUnitScale(currency: string) {
   return BigInt(10) ** BigInt(getCurrencyMinorUnits(currency));
 }
 
-export function normalizeCurrencyCode(currency: string | null | undefined) {
+export function normalizeCurrencyCode(
+  currency: string | null | undefined,
+): SupportedBillingCurrency {
   const normalized = (currency ?? "ZMW").trim().toUpperCase();
 
   if (!/^[A-Z]{3}$/.test(normalized)) {
@@ -19,7 +26,17 @@ export function normalizeCurrencyCode(currency: string | null | undefined) {
     throw new Error(`Currency ${normalized} is not supported yet.`);
   }
 
-  return normalized;
+  return normalized as SupportedBillingCurrency;
+}
+
+export function isSupportedBillingCurrencyCode(
+  currency: string | null | undefined,
+): currency is SupportedBillingCurrency {
+  const normalized = (currency ?? "").trim().toUpperCase();
+
+  return SUPPORTED_BILLING_CURRENCIES.includes(
+    normalized as SupportedBillingCurrency,
+  );
 }
 
 export function getCurrencyMinorUnits(currency: string) {
@@ -88,29 +105,74 @@ export function parseMinorUnits(value: string, currency = "ZMW") {
 }
 
 export function formatMinorUnits(amountMinor: bigint | number, currency = "ZMW") {
-  const normalizedCurrency = normalizeCurrencyCode(currency);
   const validAmount = assertValidMinorUnitAmount(amountMinor);
-  const scale = getMinorUnitScale(normalizedCurrency);
-  const wholePart = validAmount / scale;
-  const fractionPart = String(validAmount % scale).padStart(
-    getCurrencyMinorUnits(normalizedCurrency),
-    "0",
-  );
-  const prefix = normalizedCurrency === "ZMW" ? "K" : `${normalizedCurrency} `;
 
-  return `${prefix}${wholePart.toLocaleString("en-ZM")}.${fractionPart}`;
+  try {
+    const normalizedCurrency = normalizeCurrencyCode(currency);
+    const minorUnits = getCurrencyMinorUnits(normalizedCurrency);
+    const scale = getMinorUnitScale(normalizedCurrency);
+    const majorAmount = Number(validAmount) / Number(scale);
+
+    if (
+      !Number.isFinite(majorAmount) ||
+      validAmount > BigInt(Number.MAX_SAFE_INTEGER)
+    ) {
+      return fallbackMinorUnitFormat(validAmount, currency);
+    }
+
+    return new Intl.NumberFormat("en-ZM", {
+      style: "currency",
+      currency: normalizedCurrency,
+      currencyDisplay: "symbol",
+      minimumFractionDigits: minorUnits,
+      maximumFractionDigits: minorUnits,
+    })
+      .format(majorAmount)
+      .replace(/\u00a0/g, " ")
+      .replace(/^K\s+/, "K");
+  } catch {
+    return fallbackMinorUnitFormat(validAmount, currency);
+  }
 }
 
 export function minorUnitsToDecimalString(
   amountMinor: bigint | number,
   currency = "ZMW",
 ) {
-  const normalizedCurrency = normalizeCurrencyCode(currency);
   const validAmount = assertValidMinorUnitAmount(amountMinor);
-  const minorUnits = getCurrencyMinorUnits(normalizedCurrency);
-  const scale = getMinorUnitScale(normalizedCurrency);
+
+  let minorUnits = 2;
+
+  try {
+    minorUnits = getCurrencyMinorUnits(currency);
+  } catch {
+    // Historical or malformed currency values should not break billing pages.
+  }
+
+  const scale = BigInt(10) ** BigInt(minorUnits);
   const wholePart = validAmount / scale;
   const fractionPart = String(validAmount % scale).padStart(minorUnits, "0");
 
   return minorUnits === 0 ? String(wholePart) : `${wholePart}.${fractionPart}`;
+}
+
+function fallbackCurrencyCode(currency: string | null | undefined) {
+  const raw = (currency ?? "").trim().toUpperCase();
+
+  if (!raw) {
+    return "UNKNOWN";
+  }
+
+  return raw.replace(/\s+/g, "_").slice(0, 24);
+}
+
+function fallbackMinorUnitFormat(
+  amountMinor: bigint,
+  currency: string | null | undefined,
+) {
+  const scale = BigInt(100);
+  const wholePart = amountMinor / scale;
+  const fractionPart = String(amountMinor % scale).padStart(2, "0");
+
+  return `${fallbackCurrencyCode(currency)} ${wholePart}.${fractionPart}`;
 }

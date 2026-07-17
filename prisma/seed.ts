@@ -6,6 +6,7 @@ import {
   BillingInterval,
   BookStatus,
   CommunityPostType,
+  EmailDeliveryClass,
   EmailOutboxStatus,
   InvoiceStatus,
   MembershipApplicationStatus,
@@ -1180,8 +1181,13 @@ async function main() {
       {
         recipientUserId: submittedApplicant.id,
         toEmail: submittedApplicant.email,
+        normalizedToEmail: submittedApplicant.email.toLowerCase(),
         templateKey: "application_received",
         subject: "Sonder received your application",
+        textBody:
+          "Thank you for applying to join Sonder Book Club. You can check your status at /application-status.",
+        htmlBody:
+          "<p>Thank you for applying to join Sonder Book Club.</p><p>You can check your status at /application-status.</p>",
         payload: {
           textBody:
             "Thank you for applying to join Sonder Book Club. You can check your status at /application-status.",
@@ -1195,8 +1201,14 @@ async function main() {
       {
         recipientUserId: member.id,
         toEmail: member.email,
+        normalizedToEmail: member.email.toLowerCase(),
         templateKey: "announcement_published",
         subject: "Sonder announcement: Reading plan update",
+        textBody:
+          "A new Sonder announcement was published. Read it at /announcements.",
+        htmlBody:
+          "<p>A new Sonder announcement was published.</p><p>Read it at /announcements.</p>",
+        deliveryClass: EmailDeliveryClass.PREFERENCE_CONTROLLED,
         payload: {
           textBody:
             "A new Sonder announcement was published. Read it at /announcements.",
@@ -1207,14 +1219,24 @@ async function main() {
         status: EmailOutboxStatus.FAILED,
         attempts: 5,
         maxAttempts: 5,
+        failedAt: now,
+        lastFailureCategory: "seed_failure",
+        lastFailureCode: "provider_unavailable",
+        lastFailureRetryable: true,
         lastError: "Development provider unavailable.",
         dedupeKey: "seed:email:announcement:failed",
       },
       {
         recipientUserId: memberTwo.id,
         toEmail: memberTwo.email,
+        normalizedToEmail: memberTwo.email.toLowerCase(),
         templateKey: "meeting_updated",
         subject: "Sonder meeting update: Midpoint discussion",
+        textBody:
+          "There is a meeting update for Midpoint discussion. Open /meetings.",
+        htmlBody:
+          "<p>There is a meeting update for Midpoint discussion.</p><p>Open /meetings.</p>",
+        deliveryClass: EmailDeliveryClass.PREFERENCE_CONTROLLED,
         payload: {
           textBody:
             "There is a meeting update for Midpoint discussion. Open /meetings.",
@@ -1225,6 +1247,7 @@ async function main() {
         status: EmailOutboxStatus.SENT,
         attempts: 1,
         sentAt: addDays(now, -1),
+        provider: "legacy",
         providerMessageId: "dev-seed-message",
         dedupeKey: "seed:email:meeting:sent",
       },

@@ -1,4 +1,5 @@
 import {
+  EmailDeliveryClass,
   MembershipStatus,
   NotificationType,
   Prisma,
@@ -10,18 +11,19 @@ import {
   type EmailTemplateData,
   type EmailTemplateKey,
 } from "@/features/email/templates";
+import { isValidEmailAddress } from "@/features/email/server-config";
 import { sanitizeInternalHref } from "@/features/notifications/links";
 
 const ACTIVE_MEMBER_NOTIFICATION_BATCH_SIZE = 100;
 
-type NotificationPreferenceKind =
+export type NotificationPreferenceKind =
   | "application"
   | "community"
   | "announcement"
   | "meeting"
   | "billing";
 
-type DeliveryPolicy = "optional" | "transactional" | "none";
+export type DeliveryPolicy = "optional" | "transactional" | "none";
 
 type RecipientSnapshot = {
   id: string;
@@ -35,7 +37,7 @@ type ActorSnapshot = {
   name?: string | null;
 };
 
-type NotificationPreferenceSnapshot = {
+export type NotificationPreferenceSnapshot = {
   inAppCommunityActivity: boolean;
   inAppAnnouncements: boolean;
   inAppApplicationUpdates: boolean;
@@ -149,7 +151,7 @@ function shouldCreateInApp(
   return true;
 }
 
-function shouldQueueEmail(
+export function shouldQueueEmail(
   preference: NotificationPreferenceSnapshot,
   kind: NotificationPreferenceKind,
   delivery: DeliveryPolicy,
@@ -186,24 +188,22 @@ async function resolveRecipientEmail(
   recipient: RecipientSnapshot,
   override: string | null | undefined,
 ) {
-  if (override) {
-    return override;
-  }
-
-  if (recipient.email) {
-    return recipient.email;
-  }
-
   const user = await tx.user.findUnique({
     where: {
       id: recipient.id,
     },
     select: {
       email: true,
+      deletedAt: true,
     },
   });
 
-  return user?.email ?? null;
+  if (!user || user.deletedAt) {
+    return null;
+  }
+
+  const email = (override ?? recipient.email ?? user.email)?.trim();
+  return email && isValidEmailAddress(email) ? email : null;
 }
 
 function outboxPayload(
@@ -227,6 +227,20 @@ async function queueEmailOutbox(
     return null;
   }
 
+  const normalizedToEmail = toEmail.toLowerCase();
+  const suppression = await tx.emailSuppression.findUnique({
+    where: {
+      normalizedEmail: normalizedToEmail,
+    },
+    select: {
+      active: true,
+    },
+  });
+
+  if (suppression?.active) {
+    return null;
+  }
+
   const rendered = renderEmailTemplate(input.templateKey, {
     recipientName: recipient.name,
     ...input.data,
@@ -239,9 +253,17 @@ async function queueEmailOutbox(
     create: {
       recipientUserId: recipient.id,
       toEmail,
+      normalizedToEmail,
       templateKey: rendered.templateKey,
+      templateVersion: rendered.templateVersion,
       subject: rendered.subject,
+      textBody: rendered.textBody,
+      htmlBody: rendered.htmlBody,
       payload: outboxPayload(rendered),
+      deliveryClass:
+        input.delivery === "transactional"
+          ? EmailDeliveryClass.TRANSACTIONAL
+          : EmailDeliveryClass.PREFERENCE_CONTROLLED,
       dedupeKey: input.dedupeKey,
     },
     update: {},

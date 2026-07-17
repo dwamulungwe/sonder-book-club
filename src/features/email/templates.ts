@@ -1,4 +1,7 @@
 import { formatDateTime } from "@/lib/formatters";
+import { getTrustedAppBaseUrl } from "@/features/email/server-config";
+
+export const EMAIL_TEMPLATE_VERSION = 1;
 
 export type EmailTemplateKey =
   | "application_received"
@@ -39,6 +42,7 @@ export type EmailTemplateData = {
 
 export type RenderedEmailTemplate = {
   templateKey: EmailTemplateKey;
+  templateVersion: number;
   subject: string;
   textBody: string;
   htmlBody: string;
@@ -72,6 +76,27 @@ function paragraphHtml(lines: string[]) {
     .join("");
 }
 
+function trustedAppHref(value: string | null | undefined, fallbackPath: string) {
+  const baseUrl = getTrustedAppBaseUrl();
+  if (!baseUrl) {
+    return null;
+  }
+
+  const path = cleanText(value, fallbackPath);
+  const safePath = path.startsWith("/") && !path.startsWith("//") ? path : fallbackPath;
+
+  try {
+    const url = new URL(safePath, baseUrl);
+    return url.origin === baseUrl.origin ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+function linkLine(label: string, href: string | null) {
+  return href ? `${label}: ${href}` : `${label} in Sonder.`;
+}
+
 function greeting(name: string | null | undefined) {
   const cleaned = cleanText(name);
   return cleaned ? `Hi ${cleaned},` : "Hi,";
@@ -85,6 +110,7 @@ function render(
 ): RenderedEmailTemplate {
   return {
     templateKey,
+    templateVersion: EMAIL_TEMPLATE_VERSION,
     subject,
     textBody: lines.join("\n\n"),
     htmlBody: paragraphHtml(lines),
@@ -98,12 +124,12 @@ export function renderEmailTemplate(
 ) {
   const recipientName = cleanText(data.recipientName, "reader");
   const actorName = cleanText(data.actorName, "A Sonder member");
-  const statusHref = cleanText(data.statusHref, "/application-status");
-  const communityHref = cleanText(data.communityHref, "/community");
-  const profileHref = cleanText(data.profileHref, "/profile");
-  const announcementHref = cleanText(data.announcementHref, "/announcements");
-  const meetingHref = cleanText(data.meetingHref, "/meetings");
-  const billingHref = cleanText(data.billingHref, "/membership/billing");
+  const statusHref = trustedAppHref(data.statusHref, "/application-status");
+  const communityHref = trustedAppHref(data.communityHref, "/community");
+  const profileHref = trustedAppHref(data.profileHref, "/profile");
+  const announcementHref = trustedAppHref(data.announcementHref, "/announcements");
+  const meetingHref = trustedAppHref(data.meetingHref, "/meetings");
+  const billingHref = trustedAppHref(data.billingHref, "/membership/billing");
   const invoiceNumber = truncate(cleanText(data.invoiceNumber, "membership invoice"), 80);
   const amountFormatted = cleanText(data.amountFormatted, "the recorded amount");
   const paymentReference = truncate(cleanText(data.paymentReference, "payment reference pending"), 80);
@@ -127,7 +153,7 @@ export function renderEmailTemplate(
         [
           greeting(recipientName),
           "Thank you for applying to join Sonder Book Club. Your application has been received and the team will review it with care.",
-          `You can check your application status here: ${statusHref}`,
+          linkLine("Check your application status", statusHref),
         ],
         { statusHref },
       );
@@ -138,7 +164,7 @@ export function renderEmailTemplate(
         [
           greeting(recipientName),
           "Your application is now under review. We will keep the process thoughtful and let you know when there is a decision.",
-          `You can check your status here: ${statusHref}`,
+          linkLine("Check your application status", statusHref),
         ],
         { statusHref },
       );
@@ -149,8 +175,8 @@ export function renderEmailTemplate(
         [
           greeting(recipientName),
           "Your membership has been approved. Welcome to Sonder. We are glad to have another thoughtful reader in the room.",
-          `You can complete your profile here: ${profileHref}`,
-          `You can join the community conversation here: ${communityHref}`,
+          linkLine("Complete your profile", profileHref),
+          linkLine("Join the community conversation", communityHref),
         ],
         { profileHref, communityHref },
       );
@@ -162,7 +188,7 @@ export function renderEmailTemplate(
           greeting(recipientName),
           "Thank you for taking the time to apply. Sonder is not able to offer membership at this time.",
           "We appreciate the care you put into your application and wish you steady, generous reading ahead.",
-          `You can view your current status here: ${statusHref}`,
+          linkLine("View your current status", statusHref),
         ],
         { statusHref },
       );
@@ -173,7 +199,7 @@ export function renderEmailTemplate(
         [
           greeting(recipientName),
           "Thank you for applying to Sonder. Your application is still active, and we have placed it on the waitlist while the team manages the next intake window.",
-          `You can check your status here: ${statusHref}`,
+          linkLine("Check your application status", statusHref),
         ],
         { statusHref },
       );
@@ -184,7 +210,7 @@ export function renderEmailTemplate(
         [
           greeting(recipientName),
           `${actorName} commented on your community post.`,
-          `Open the community feed: ${communityHref}`,
+          linkLine("Open the community feed", communityHref),
         ],
         { communityHref },
       );
@@ -195,7 +221,7 @@ export function renderEmailTemplate(
         [
           greeting(recipientName),
           `${actorName} replied to your comment in the community feed.`,
-          `Open the community feed: ${communityHref}`,
+          linkLine("Open the community feed", communityHref),
         ],
         { communityHref },
       );
@@ -207,7 +233,7 @@ export function renderEmailTemplate(
           greeting(recipientName),
           `A new announcement was published: ${announcementTitle}`,
           announcementBody || "Open Sonder to read the full update.",
-          `Read it in Sonder: ${announcementHref}`,
+          linkLine("Read it in Sonder", announcementHref),
         ],
         {
           announcementHref,
@@ -223,7 +249,7 @@ export function renderEmailTemplate(
           `There is a meeting update for ${meetingTitle}.`,
           `When: ${meetingTime}`,
           `Where: ${meetingLocation}`,
-          `Open meetings in Sonder: ${meetingHref}`,
+          linkLine("Open meetings in Sonder", meetingHref),
         ],
         {
           meetingHref,
@@ -240,7 +266,7 @@ export function renderEmailTemplate(
           greeting(recipientName),
           `A Sonder membership invoice has been created for ${amountFormatted}.`,
           `Invoice: ${invoiceNumber}`,
-          `Open billing in Sonder: ${billingHref}`,
+          linkLine("Open billing in Sonder", billingHref),
         ],
         {
           billingHref,
@@ -257,7 +283,7 @@ export function renderEmailTemplate(
           `A membership payment for ${amountFormatted} has been recorded and is awaiting confirmation.`,
           `Reference: ${paymentReference}`,
           invoiceNumber ? `Invoice: ${invoiceNumber}` : "Invoice: not linked",
-          `Open billing in Sonder: ${billingHref}`,
+          linkLine("Open billing in Sonder", billingHref),
         ],
         {
           billingHref,
@@ -275,7 +301,7 @@ export function renderEmailTemplate(
           `Your membership payment for ${amountFormatted} has been confirmed.`,
           `Reference: ${paymentReference}`,
           invoiceNumber ? `Invoice: ${invoiceNumber}` : "Invoice: not linked",
-          `Open billing in Sonder: ${billingHref}`,
+          linkLine("Open billing in Sonder", billingHref),
         ],
         {
           billingHref,
@@ -292,7 +318,7 @@ export function renderEmailTemplate(
           greeting(recipientName),
           `A membership payment for ${amountFormatted} could not be confirmed.`,
           invoiceNumber ? `Invoice: ${invoiceNumber}` : "Invoice: not linked",
-          `Open billing in Sonder: ${billingHref}`,
+          linkLine("Open billing in Sonder", billingHref),
         ],
         {
           billingHref,
@@ -307,7 +333,7 @@ export function renderEmailTemplate(
         [
           greeting(recipientName),
           "Your Sonder membership has an overdue invoice.",
-          `Open billing in Sonder: ${billingHref}`,
+          linkLine("Open billing in Sonder", billingHref),
         ],
         {
           billingHref,
@@ -320,7 +346,7 @@ export function renderEmailTemplate(
         [
           greeting(recipientName),
           `Your ${planName} membership dues are waived.`,
-          `Open billing in Sonder: ${billingHref}`,
+          linkLine("Open billing in Sonder", billingHref),
         ],
         {
           billingHref,

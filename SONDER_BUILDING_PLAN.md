@@ -270,6 +270,27 @@ Notification controls:
 - delivery log
 - failed-delivery tracking
 
+Implementation note after v0.3 Change Set 8:
+
+- existing business workflows still render and enqueue email inside their own
+  atomic transaction, while provider delivery runs later and never holds an
+  interactive database transaction open during network I/O
+- essential application and billing messages are explicitly transactional;
+  community, announcement, and meeting emails remain preference-controlled at
+  enqueue time
+- the outbox now has bounded `FOR UPDATE SKIP LOCKED` claiming, expiring leases,
+  audited attempts, deterministic provider idempotency, retry scheduling,
+  administrative review for uncertain delivery, and recipient suppression
+- Resend is the first adapter, but remains disabled until server-only sender,
+  API, webhook, application-origin, and cron configuration is complete
+- verified, idempotent Resend webhooks distinguish provider acceptance from
+  delivery and preserve delayed, failed, bounce, complaint, and suppression
+  outcomes without changing the associated business transaction
+- Vercel Cron registration is deliberately deferred until the account plan and
+  desired latency are confirmed; the secured route exists but no schedule is active
+- marketing campaigns, weekly digests, inbound email, attachments, and a
+  higher-frequency durable queue remain deferred
+
 ### 4.7 Registration and membership applications
 
 The existing signup flow should become a proper membership application process.

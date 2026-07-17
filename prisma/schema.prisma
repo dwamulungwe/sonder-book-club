@@ -136,6 +136,44 @@ enum EmailOutboxStatus {
   SENT
   FAILED
   CANCELLED
+  DELIVERED
+  DELIVERY_DELAYED
+  RETRY_SCHEDULED
+  PERMANENTLY_FAILED
+  BOUNCED
+  COMPLAINED
+  SUPPRESSED
+  REVIEW_REQUIRED
+}
+
+enum EmailDeliveryClass {
+  TRANSACTIONAL
+  PREFERENCE_CONTROLLED
+}
+
+enum EmailDeliveryAttemptOutcome {
+  PROCESSING
+  ACCEPTED
+  RETRYABLE_FAILURE
+  PERMANENT_FAILURE
+  UNCERTAIN
+  SUPPRESSED
+}
+
+enum EmailWebhookProcessingStatus {
+  RECEIVED
+  PROCESSED
+  IGNORED
+  FAILED
+  REVIEW_REQUIRED
+}
+
+enum EmailSuppressionReason {
+  HARD_BOUNCE
+  COMPLAINT
+  PROVIDER_SUPPRESSION
+  ADMINISTRATIVE
+  INVALID_ADDRESS
 }
 
 enum PostReactionType {
@@ -223,48 +261,49 @@ enum ProviderWebhookEventStatus {
 }
 
 model User {
-  id                     String                  @id @default(cuid())
-  name                   String
-  email                  String                  @unique
-  emailVerified          DateTime?
-  image                  String?
-  passwordHash           String?
-  systemRole             SystemRole              @default(GUEST)
-  membership             Membership?
-  createdBooks           Book[]                  @relation("BookCreator")
-  createdPlans           ReadingPlan[]           @relation("PlanCreator")
-  progresses             ReadingProgress[]
-  createdMeetings        Meeting[]               @relation("MeetingCreator")
-  rsvps                  MeetingRsvp[]
-  attendances            MeetingAttendance[]     @relation("AttendanceMember")
-  recordedAttendances    MeetingAttendance[]     @relation("AttendanceRecorder")
-  meetingNotesAuthored   MeetingNote[]           @relation("MeetingNoteAuthor")
-  createdAnnouncements   Announcement[]          @relation("AnnouncementCreator")
-  nominations            BookNomination[]
-  createdPolls           Poll[]                  @relation("PollCreator")
-  votes                  PollVote[]
-  recordedPayments       MembershipPayment[]     @relation("PaymentRecorder")
-  confirmedPayments      MembershipPayment[]     @relation("PaymentConfirmer")
-  createdMembershipPlans MembershipPlan[]        @relation("MembershipPlanCreator")
-  createdInvoices        MembershipInvoice[]     @relation("InvoiceCreator")
-  communityPosts         CommunityPost[]         @relation("CommunityPostAuthor")
-  postComments           PostComment[]           @relation("PostCommentAuthor")
-  postReactions          PostReaction[]
-  postBookmarks          PostBookmark[]
-  contentReports         ContentReport[]         @relation("ContentReportReporter")
-  reviewedReports        ContentReport[]         @relation("ContentReportReviewer")
-  profile                MemberProfile?
-  membershipApplications MembershipApplication[] @relation("MembershipApplicationApplicant")
-  reviewedApplications   MembershipApplication[] @relation("MembershipApplicationReviewer")
-  receivedNotifications  Notification[]          @relation("NotificationRecipient")
-  actedNotifications     Notification[]          @relation("NotificationActor")
-  notificationPreference NotificationPreference?
-  emailOutboxItems       EmailOutbox[]           @relation("EmailOutboxRecipient")
-  accounts               Account[]
-  sessions               Session[]
-  deletedAt              DateTime?
-  createdAt              DateTime                @default(now())
-  updatedAt              DateTime                @updatedAt
+  id                        String                  @id @default(cuid())
+  name                      String
+  email                     String                  @unique
+  emailVerified             DateTime?
+  image                     String?
+  passwordHash              String?
+  systemRole                SystemRole              @default(GUEST)
+  membership                Membership?
+  createdBooks              Book[]                  @relation("BookCreator")
+  createdPlans              ReadingPlan[]           @relation("PlanCreator")
+  progresses                ReadingProgress[]
+  createdMeetings           Meeting[]               @relation("MeetingCreator")
+  rsvps                     MeetingRsvp[]
+  attendances               MeetingAttendance[]     @relation("AttendanceMember")
+  recordedAttendances       MeetingAttendance[]     @relation("AttendanceRecorder")
+  meetingNotesAuthored      MeetingNote[]           @relation("MeetingNoteAuthor")
+  createdAnnouncements      Announcement[]          @relation("AnnouncementCreator")
+  nominations               BookNomination[]
+  createdPolls              Poll[]                  @relation("PollCreator")
+  votes                     PollVote[]
+  recordedPayments          MembershipPayment[]     @relation("PaymentRecorder")
+  confirmedPayments         MembershipPayment[]     @relation("PaymentConfirmer")
+  createdMembershipPlans    MembershipPlan[]        @relation("MembershipPlanCreator")
+  createdInvoices           MembershipInvoice[]     @relation("InvoiceCreator")
+  communityPosts            CommunityPost[]         @relation("CommunityPostAuthor")
+  postComments              PostComment[]           @relation("PostCommentAuthor")
+  postReactions             PostReaction[]
+  postBookmarks             PostBookmark[]
+  contentReports            ContentReport[]         @relation("ContentReportReporter")
+  reviewedReports           ContentReport[]         @relation("ContentReportReviewer")
+  profile                   MemberProfile?
+  membershipApplications    MembershipApplication[] @relation("MembershipApplicationApplicant")
+  reviewedApplications      MembershipApplication[] @relation("MembershipApplicationReviewer")
+  receivedNotifications     Notification[]          @relation("NotificationRecipient")
+  actedNotifications        Notification[]          @relation("NotificationActor")
+  notificationPreference    NotificationPreference?
+  emailOutboxItems          EmailOutbox[]           @relation("EmailOutboxRecipient")
+  resolvedEmailSuppressions EmailSuppression[]      @relation("EmailSuppressionResolver")
+  accounts                  Account[]
+  sessions                  Session[]
+  deletedAt                 DateTime?
+  createdAt                 DateTime                @default(now())
+  updatedAt                 DateTime                @updatedAt
 
   @@index([systemRole])
   @@index([deletedAt])
@@ -629,30 +668,129 @@ model NotificationPreference {
 }
 
 model EmailOutbox {
-  id                  String            @id @default(cuid())
-  recipientUserId     String?
-  toEmail             String            @db.VarChar(255)
-  templateKey         String            @db.VarChar(120)
-  subject             String            @db.VarChar(240)
-  payload             Json
-  status              EmailOutboxStatus @default(PENDING)
-  dedupeKey           String            @unique @db.VarChar(240)
-  attempts            Int               @default(0)
-  maxAttempts         Int               @default(5)
-  nextAttemptAt       DateTime?
-  processingStartedAt DateTime?
-  sentAt              DateTime?
-  providerMessageId   String?           @db.VarChar(255)
-  lastError           String?           @db.VarChar(1000)
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  recipientUser       User?             @relation("EmailOutboxRecipient", fields: [recipientUserId], references: [id], onDelete: SetNull)
+  id                             String                      @id @default(cuid())
+  recipientUserId                String?
+  toEmail                        String                      @db.VarChar(255)
+  normalizedToEmail              String                      @db.VarChar(255)
+  templateKey                    String                      @db.VarChar(120)
+  templateVersion                Int                         @default(1)
+  subject                        String                      @db.VarChar(240)
+  textBody                       String                      @db.Text
+  htmlBody                       String                      @db.Text
+  payload                        Json
+  deliveryClass                  EmailDeliveryClass          @default(TRANSACTIONAL)
+  status                         EmailOutboxStatus           @default(PENDING)
+  dedupeKey                      String                      @unique @db.VarChar(240)
+  provider                       String?                     @db.VarChar(32)
+  providerMessageId              String?                     @db.VarChar(255)
+  providerIdempotencyKey         String?                     @unique @db.VarChar(256)
+  providerIdempotencyKeyIssuedAt DateTime?
+  attempts                       Int                         @default(0)
+  maxAttempts                    Int                         @default(5)
+  nextAttemptAt                  DateTime?
+  lastAttemptAt                  DateTime?
+  processingStartedAt            DateTime?
+  leaseOwner                     String?                     @db.VarChar(120)
+  leaseExpiresAt                 DateTime?
+  sentAt                         DateTime?
+  deliveryDelayedAt              DateTime?
+  deliveredAt                    DateTime?
+  failedAt                       DateTime?
+  bouncedAt                      DateTime?
+  complainedAt                   DateTime?
+  suppressedAt                   DateTime?
+  cancelledAt                    DateTime?
+  reviewRequiredAt               DateTime?
+  uncertainSince                 DateTime?
+  lastDeliveryEventAt            DateTime?
+  lastDeliveryEventType          String?                     @db.VarChar(80)
+  lastFailureCategory            String?                     @db.VarChar(80)
+  lastFailureCode                String?                     @db.VarChar(120)
+  lastFailureRetryable           Boolean?
+  lastError                      String?                     @db.VarChar(1000)
+  createdAt                      DateTime                    @default(now())
+  updatedAt                      DateTime                    @updatedAt
+  recipientUser                  User?                       @relation("EmailOutboxRecipient", fields: [recipientUserId], references: [id], onDelete: SetNull)
+  deliveryAttempts               EmailDeliveryAttempt[]
+  webhookEvents                  EmailProviderWebhookEvent[]
 
-  @@index([status, nextAttemptAt])
+  @@index([status, nextAttemptAt, leaseExpiresAt])
   @@index([status, createdAt])
+  @@index([provider, status])
+  @@index([provider, providerMessageId])
+  @@index([normalizedToEmail, status])
+  @@index([lastDeliveryEventAt])
   @@index([createdAt])
   @@index([recipientUserId, createdAt])
   @@map("email_outbox")
+}
+
+model EmailDeliveryAttempt {
+  id                     String                      @id @default(cuid())
+  outboxId               String
+  attemptNumber          Int
+  provider               String                      @db.VarChar(32)
+  providerIdempotencyKey String                      @db.VarChar(256)
+  providerMessageId      String?                     @db.VarChar(255)
+  startedAt              DateTime                    @default(now())
+  completedAt            DateTime?
+  outcome                EmailDeliveryAttemptOutcome @default(PROCESSING)
+  httpStatus             Int?
+  failureCode            String?                     @db.VarChar(120)
+  retryable              Boolean?
+  uncertainDelivery      Boolean                     @default(false)
+  createdAt              DateTime                    @default(now())
+  outbox                 EmailOutbox                 @relation(fields: [outboxId], references: [id], onDelete: Restrict)
+
+  @@unique([outboxId, attemptNumber])
+  @@index([provider, providerMessageId])
+  @@index([outcome, startedAt])
+  @@map("email_delivery_attempts")
+}
+
+model EmailProviderWebhookEvent {
+  id                String                       @id @default(cuid())
+  provider          String                       @db.VarChar(32)
+  providerEventId   String                       @db.VarChar(160)
+  providerMessageId String?                      @db.VarChar(255)
+  eventType         String                       @db.VarChar(80)
+  eventTimestamp    DateTime
+  payloadHash       String                       @db.VarChar(64)
+  status            EmailWebhookProcessingStatus @default(RECEIVED)
+  processedAt       DateTime?
+  failureReason     String?                      @db.VarChar(120)
+  outboxId          String?
+  createdAt         DateTime                     @default(now())
+  outbox            EmailOutbox?                 @relation(fields: [outboxId], references: [id], onDelete: Restrict)
+
+  @@unique([provider, providerEventId])
+  @@index([provider, providerMessageId])
+  @@index([payloadHash])
+  @@index([status, createdAt])
+  @@index([outboxId, eventTimestamp])
+  @@map("email_provider_webhook_events")
+}
+
+model EmailSuppression {
+  id              String                 @id @default(cuid())
+  normalizedEmail String                 @unique @db.VarChar(255)
+  reason          EmailSuppressionReason
+  active          Boolean                @default(true)
+  provider        String?                @db.VarChar(32)
+  source          String                 @db.VarChar(80)
+  firstOccurredAt DateTime
+  lastOccurredAt  DateTime
+  resolvedAt      DateTime?
+  resolvedById    String?
+  resolutionNote  String?                @db.VarChar(500)
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  resolvedBy      User?                  @relation("EmailSuppressionResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([active, reason, lastOccurredAt])
+  @@index([provider, active])
+  @@index([resolvedById])
+  @@map("email_suppressions")
 }
 
 model PostComment {

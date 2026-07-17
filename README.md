@@ -10,6 +10,7 @@ Use these docs when preparing or presenting the current demo build:
 - [DEMO_SCRIPT.md](./DEMO_SCRIPT.md) - page-by-page demo walkthrough
 - [TESTING_CHECKLIST.md](./TESTING_CHECKLIST.md) - manual pre-demo smoke test
 - [PRODUCTION_DEPLOYMENT_CHECKLIST.md](./PRODUCTION_DEPLOYMENT_CHECKLIST.md) - production deployment runbook
+- [src/features/email/README.md](./src/features/email/README.md) - durable email delivery, Resend, webhook, suppression, and cron runbook
 
 ## Overview
 

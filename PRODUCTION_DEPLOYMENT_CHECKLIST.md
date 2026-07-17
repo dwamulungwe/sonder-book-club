@@ -69,3 +69,31 @@ Mark the deployment ready only when:
 - build checks passed
 - login works in the hosted environment
 - read and write flows succeed against the hosted PostgreSQL database
+
+## 7. Email Delivery Readiness (Not Yet Active)
+
+Do not enable Production email delivery until Preview has passed a controlled
+end-to-end test.
+
+1. Create the Resend account and choose a dedicated sending subdomain where
+   appropriate.
+2. Add and verify the required SPF and DKIM DNS records. Add DMARC only according
+   to the deployment policy after SPF/DKIM are behaving as expected.
+3. Create a sending-only API key with the minimum available scope.
+4. Configure the sender identity and the verified HTTPS webhook endpoint for
+   sent, delivered, delivery-delayed, failed, bounced, complained, and suppressed
+   events.
+5. Configure Preview-scoped server variables: `SONDER_EMAIL_PROVIDER`,
+   `SONDER_EMAIL_FROM`, optional `SONDER_EMAIL_REPLY_TO`, `SONDER_APP_BASE_URL`,
+   `RESEND_API_KEY`, `RESEND_WEBHOOK_SIGNING_SECRET`, and `CRON_SECRET`.
+6. Apply the committed Change Set 8 migration chain with the deployment-safe
+   migration workflow before exercising delivery. Do not use `prisma db push`.
+7. Perform one controlled Preview delivery and inspect accepted, delivered,
+   bounced, complaint, duplicate-webhook, and suppression behaviour.
+8. Confirm the Vercel account plan and desired latency before adding a
+   `vercel.json` cron schedule. Vercel Cron runs only on Production deployments.
+9. Add monitoring for queue age, retry volume, uncertain/review-required jobs,
+   permanent failures, webhook failures, complaints, and suppression growth.
+10. Enable Production variables only after Preview passes. Domain verification,
+    webhook registration, scheduling, and Production enablement are not part of
+    Change Set 8 implementation.

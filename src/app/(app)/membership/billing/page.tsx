@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import type { Metadata } from "next";
 import {
   InvoiceStatus,
@@ -17,7 +19,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { startOnlineCheckoutAction } from "@/features/billing/actions";
 import { formatMinorUnits } from "@/features/billing/currency";
+import { onlinePaymentProviderStatus } from "@/features/billing/online-payments";
 import {
   MEMBER_INVOICE_LIMIT,
   MEMBER_PAYMENT_HISTORY_LIMIT,
@@ -34,6 +38,7 @@ import {
   formatSubscriptionStatus,
 } from "@/lib/formatters";
 import { requireSessionUser } from "@/lib/session";
+import { OnlinePaymentSubmitButton } from "./online-payment-submit-button";
 
 export const metadata: Metadata = {
   title: "Billing",
@@ -95,10 +100,41 @@ function paymentTone(status: PaymentStatus) {
   return "neutral" as const;
 }
 
+const PAYABLE_INVOICE_STATUSES: readonly InvoiceStatus[] = [
+  InvoiceStatus.OPEN,
+  InvoiceStatus.PARTIALLY_PAID,
+  InvoiceStatus.OVERDUE,
+] as const;
+
+function isPayableInvoice(status: InvoiceStatus, balance: bigint) {
+  return PAYABLE_INVOICE_STATUSES.includes(status) && balance > 0;
+}
+
+function OnlinePaymentForm({
+  invoiceId,
+  redirectTo,
+  amountLabel,
+}: {
+  invoiceId: string;
+  redirectTo: string;
+  amountLabel: string;
+}) {
+  return (
+    <form action={startOnlineCheckoutAction} className="mt-3">
+      <input type="hidden" name="invoiceId" value={invoiceId} />
+      <input type="hidden" name="redirectTo" value={redirectTo} />
+      <input type="hidden" name="checkoutNonce" value={randomUUID()} />
+      <OnlinePaymentSubmitButton amountLabel={amountLabel} />
+    </form>
+  );
+}
+
 export default async function BillingPage() {
   const user = await requireSessionUser();
   const data = await getMemberBillingPageData(user.id);
   const subscription = data.currentSubscription;
+  const providerStatus = onlinePaymentProviderStatus();
+  const onlinePaymentsEnabled = providerStatus.isConfigured;
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -182,14 +218,16 @@ export default async function BillingPage() {
         <article className="rounded-[1rem] border border-stone-200 bg-stone-50 p-4 text-sm text-stone-700 shadow-sm sm:p-5">
           <div className="flex items-start gap-3">
             <ReceiptText className="mt-0.5 size-5 shrink-0 text-stone-500" />
-            <div>
-              <p className="font-semibold text-stone-950">
-                Offline payments only
+          <div>
+            <p className="font-semibold text-stone-950">
+                {onlinePaymentsEnabled
+                  ? "Online checkout available"
+                  : "Online payments unavailable"}
               </p>
               <p className="mt-1 leading-6">
-                Sonder has not enabled online checkout yet. Cash, bank transfer,
-                mobile-money, and approved offline payments are recorded by an
-                administrator after verification.
+                {onlinePaymentsEnabled
+                  ? "Payable invoices can be sent to Flutterwave sandbox checkout. Mobile-money approval may complete asynchronously, so Sonder only updates billing after server-side verification."
+                  : "Online checkout is currently disabled. Cash, bank transfer, mobile-money, and approved offline payments are still recorded by an administrator after verification."}
               </p>
             </div>
           </div>
@@ -210,6 +248,8 @@ export default async function BillingPage() {
             <div className="space-y-3 md:hidden">
               {data.membership.invoices.map((invoice) => {
                 const balance = calculateInvoiceBalance(invoice);
+                const amountLabel = formatMinorUnits(balance, invoice.currency);
+                const payable = isPayableInvoice(invoice.status, balance);
 
                 return (
                   <article
@@ -246,10 +286,27 @@ export default async function BillingPage() {
                           Balance
                         </dt>
                         <dd className="mt-1">
-                          {formatMinorUnits(balance, invoice.currency)}
+                          {amountLabel}
                         </dd>
                       </div>
                     </dl>
+                    {payable && onlinePaymentsEnabled ? (
+                      <div className="mt-4 border-t border-stone-100 pt-3">
+                        <p className="text-sm text-stone-600">
+                          Flutterwave may complete mobile-money approval after
+                          you return to Sonder.
+                        </p>
+                        <OnlinePaymentForm
+                          invoiceId={invoice.id}
+                          redirectTo="/membership/billing"
+                          amountLabel={amountLabel}
+                        />
+                      </div>
+                    ) : payable ? (
+                      <p className="mt-4 rounded-lg bg-stone-50 px-3 py-2 text-sm text-stone-600">
+                        Online payments are currently unavailable.
+                      </p>
+                    ) : null}
                   </article>
                 );
               })}
@@ -265,11 +322,14 @@ export default async function BillingPage() {
                     <TableHead>Amount</TableHead>
                     <TableHead>Paid</TableHead>
                     <TableHead>Balance</TableHead>
+                    <TableHead>Online</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.membership.invoices.map((invoice) => {
                     const balance = calculateInvoiceBalance(invoice);
+                    const amountLabel = formatMinorUnits(balance, invoice.currency);
+                    const payable = isPayableInvoice(invoice.status, balance);
 
                     return (
                       <TableRow key={invoice.invoiceNumber}>
@@ -302,7 +362,24 @@ export default async function BillingPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {formatMinorUnits(balance, invoice.currency)}
+                          {amountLabel}
+                        </TableCell>
+                        <TableCell>
+                          {payable && onlinePaymentsEnabled ? (
+                            <OnlinePaymentForm
+                              invoiceId={invoice.id}
+                              redirectTo="/membership/billing"
+                              amountLabel={amountLabel}
+                            />
+                          ) : payable ? (
+                            <span className="text-sm text-stone-500">
+                              Unavailable
+                            </span>
+                          ) : (
+                            <span className="text-sm text-stone-500">
+                              Not payable
+                            </span>
+                          )}
                         </TableCell>
                       </TableRow>
                     );

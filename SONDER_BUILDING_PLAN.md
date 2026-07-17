@@ -153,40 +153,45 @@ Capabilities:
 
 The payment layer must be provider-independent so Sonder is not tightly coupled to one gateway.
 
-Implementation note for v0.3 Change Set 6:
+Implementation note after v0.3 Change Set 7:
 
 - money is stored as integer minor units with ISO currency codes
 - manual/offline membership payments are operational
-- live online payments, provider webhooks, and checkout are not enabled yet
-- Flutterwave is the selected future online payment provider, but the billing
-  architecture remains provider-independent
-- the disabled payment provider remains the only implementation; no Flutterwave
-  SDK, API calls, credentials, public webhook endpoint, or functional Pay Online
-  button are added in this change set
-- the future provider flow must create a hosted checkout session, return a
-  checkout URL, store Sonder's trusted transaction reference, store the provider
-  transaction ID, support server-side transaction verification, handle
-  asynchronous mobile-money states, validate signed webhook events, check status
-  after webhook/user-return events, process refunds through an explicit workflow,
-  and reconcile provider transactions against Sonder invoices
-- a future Flutterwave adapter must map Sonder's server-generated transaction
-  reference to Flutterwave's `tx_ref`/reference, keep Flutterwave transaction IDs
-  and processor references separate, and avoid coupling invoices, subscriptions,
-  or payment records to Flutterwave-specific types
+- Flutterwave sandbox Standard checkout has a server-only adapter and remains
+  disabled unless explicit test-mode environment variables are configured
+- live online payments are not enabled; production webhook promotion remains
+  deferred
+- online provider activity is stored in provider-neutral `OnlinePaymentAttempt`
+  and `ProviderWebhookEvent` records instead of overloading invoices or settled
+  `MembershipPayment` rows
+- Sonder's server-generated trusted reference maps to Flutterwave `tx_ref`;
+  provider transaction IDs and processor references remain separate from Sonder
+  invoice/payment identifiers
+- member checkout creates or reuses one active provider attempt, calls
+  Flutterwave outside database transactions, and redirects only to an allowlisted
+  hosted checkout URL
+- return-page query parameters are never proof of payment; they only trigger a
+  bounded server-side status check after membership ownership is verified
+- the webhook route verifies Flutterwave's documented `verif-hash` secret hash,
+  stores idempotency records, and still requires server-side transaction
+  verification before giving value
 - an invoice may only be settled after trusted server-side verification confirms
   successful provider status, matching Sonder transaction reference, matching
   invoice, matching amount, matching currency, a transaction not previously
   processed, and a payment not already allocated
-- browser-return parameters or a success page are never proof of payment;
-  Flutterwave webhooks can be delivered more than once, webhook processing must
+- Flutterwave webhooks can be delivered more than once, webhook processing must
   be idempotent, mobile-money payments can complete asynchronously, and payment
-  confirmation must happen inside a database transaction
+  confirmation must happen inside the serializable billing transaction helper
+- if manual payment changes the invoice before provider settlement, verified
+  funds are preserved and routed to admin review rather than silently discarded,
+  partially allocated, or marked successful from the browser return
 - Flutterwave credentials must never be exposed to the browser; Sonder must not
   store card details, mobile-money PINs, provider access tokens, secret keys, or
   raw sensitive provider payloads, and provider errors/payloads must be sanitised
   before logging
 - email jobs can be queued for billing events, but delivery remains provider-disabled
 - invoice generation exists as explicit service logic and is not scheduled
+- scheduled reconciliation and refund execution are still deferred
 - full accounting remains separate from membership billing
 
 ### 4.4 Book-club accounting

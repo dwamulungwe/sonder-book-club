@@ -1,6 +1,9 @@
 import type { PaymentMethod } from "@prisma/client";
 
+import { getFlutterwavePaymentProvider } from "@/features/billing/providers/flutterwave";
+
 export const SELECTED_FUTURE_PAYMENT_PROVIDER = "flutterwave" as const;
+export const ACTIVE_ONLINE_PAYMENT_PROVIDER = "FLUTTERWAVE" as const;
 
 export type ProviderPaymentStatus =
   | "pending"
@@ -23,6 +26,13 @@ export type PaymentCheckoutInput = {
   amountMinor: bigint;
   currency: string;
   returnUrl: string;
+  customer: {
+    email: string;
+    name?: string | null;
+    phoneNumber?: string | null;
+  };
+  description: string;
+  metadata?: Record<string, string>;
 };
 
 export type PaymentVerificationInput = {
@@ -44,6 +54,9 @@ export type PaymentWebhookInput = {
 
 export type PaymentWebhookResult = {
   eventId?: string | null;
+  eventKey?: string | null;
+  eventType?: string | null;
+  payloadHash?: string | null;
   invoiceId?: string | null;
   sonderTransactionReference?: string | null;
   providerTransactionId: string;
@@ -84,9 +97,11 @@ export type PaymentProviderCheckout = {
   checkoutUrl: string;
   invoiceId: string;
   sonderTransactionReference: string;
-  providerTransactionId: string;
+  providerTransactionId?: string | null;
+  providerCheckoutId?: string | null;
   providerTransactionToken?: string | null;
   providerReference?: string | null;
+  checkoutExpiresAt?: Date | null;
 };
 
 export type PaymentProviderVerification = {
@@ -116,6 +131,7 @@ export type PaymentProviderRefund = {
 export type PaymentProvider = {
   name: string;
   isConfigured: boolean;
+  configurationError?: string | null;
   createCheckout(
     input: PaymentCheckoutInput,
   ): Promise<PaymentProviderResult<PaymentProviderCheckout>>;
@@ -142,6 +158,7 @@ const disabledResult = {
 const disabledProvider: PaymentProvider = {
   name: "disabled",
   isConfigured: false,
+  configurationError: null,
   async createCheckout() {
     return disabledResult;
   },
@@ -163,6 +180,7 @@ function unsupportedProvider(name: string): PaymentProvider {
   return {
     name,
     isConfigured: false,
+    configurationError: `Payment provider "${name}" is not implemented in this build.`,
     async createCheckout() {
       return {
         status: "disabled",
@@ -199,8 +217,16 @@ function unsupportedProvider(name: string): PaymentProvider {
 export function getPaymentProvider(): PaymentProvider {
   const configuredProvider = process.env.SONDER_PAYMENT_PROVIDER?.trim();
 
-  if (configuredProvider && configuredProvider !== "disabled") {
+  if (
+    configuredProvider &&
+    configuredProvider !== "disabled" &&
+    configuredProvider !== SELECTED_FUTURE_PAYMENT_PROVIDER
+  ) {
     return unsupportedProvider(configuredProvider);
+  }
+
+  if (configuredProvider === SELECTED_FUTURE_PAYMENT_PROVIDER) {
+    return getFlutterwavePaymentProvider();
   }
 
   return disabledProvider;

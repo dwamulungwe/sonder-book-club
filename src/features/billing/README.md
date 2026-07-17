@@ -1,110 +1,176 @@
 # Billing Provider Readiness
 
-Sonder has selected Flutterwave as the intended future online payment provider.
-Change Set 6 keeps online payments disabled and keeps the billing domain
-provider-independent.
+Sonder now has a sandbox-only Flutterwave Standard checkout foundation. Online
+payments remain disabled unless the server-only Flutterwave test configuration
+is complete, and live mode is intentionally not supported in Change Set 7.
 
-The local provider contract is intentionally generic. Flutterwave-specific API
-calls, SDKs, credentials, webhook routes, checkout buttons, and provider status
-changes are not implemented in this change set.
+This build preserves the Change Set 6 financial model: invoices represent money
+owed, `MembershipPayment` represents settled or manually recorded value, and
+online provider activity is stored separately in `OnlinePaymentAttempt` plus
+`ProviderWebhookEvent`.
 
-## Provider Contract
+## Official Flutterwave Docs Reviewed
 
-The `PaymentProvider` interface is ready for a later adapter to support:
+Retrieved on 2026-07-15:
 
-- creating a hosted checkout session
-- returning a checkout URL
-- carrying Sonder's trusted transaction reference
-- carrying the provider transaction ID
-- verifying a transaction server-side
-- returning asynchronous mobile-money states as pending or processing
-- parsing signed webhook events from a raw request body and headers
-- checking payment status after a webhook or user return
-- processing refunds through an explicit future workflow
-- reconciling provider transactions against Sonder invoices
+- Flutterwave Standard hosted checkout, API version `v3.0.0`:
+  https://developer.flutterwave.com/v3.0/docs/flutterwave-standard-1
+- Webhooks, `verif-hash` secret-hash validation, retries, idempotency, and
+  mandatory re-verification:
+  https://developer.flutterwave.com/v3.0/docs/webhooks
+- Transaction verification endpoint:
+  https://developer.flutterwave.com/v3.0/reference/verify-transaction
+- Payment methods and `payment_options` values:
+  https://developer.flutterwave.com/v3.0/docs/payment-methods
+- Test mode behavior:
+  https://developer.flutterwave.com/v3.0/docs/testing
 
-## Reference Strategy
+Implemented API decisions:
 
-Sonder must generate and store a trusted `sonderTransactionReference` before
-checkout is created. A future Flutterwave adapter should send that value as the
-Flutterwave `tx_ref` or equivalent payment reference.
+- Checkout creation endpoint: `POST https://api.flutterwave.com/v3/payments`
+- Verification endpoint: `GET https://api.flutterwave.com/v3/transactions/{id}/verify`
+- Authentication: `Authorization: Bearer <server-only secret key>`
+- Trusted reference field: Flutterwave `tx_ref`, generated only by Sonder
+- Checkout host allowlist: `https://checkout.flutterwave.com/v3/hosted/pay/...`
+- Webhook signature scheme: constant-time comparison of the `verif-hash` header
+  to `FLUTTERWAVE_WEBHOOK_SECRET_HASH`
+- Raw webhook body handling: the route reads the raw body once for size limiting,
+  JSON parsing, event payload hashing, and idempotency. Current official docs do
+  not specify an HMAC raw-body signature scheme for Standard webhooks.
 
-The provider response should keep Flutterwave identifiers separate from Sonder's
-reference:
+## Environment Configuration
 
-- `sonderTransactionReference`: Sonder-generated trusted transaction reference
-- `providerTransactionId`: Flutterwave transaction ID, such as `transaction_id`
-  or charge `data.id`
-- `providerReference`: Flutterwave processor/reference value, such as `flw_ref`
-- `providerTransactionToken`: optional hosted-checkout/session token if the
-  provider returns one
+Server-only variables:
 
-Invoices and subscriptions must not depend on Flutterwave-specific columns or
-types. If online payments are enabled later, any persistence changes should use
-provider-neutral payment-attempt fields that can also support another gateway.
+- `SONDER_PAYMENT_PROVIDER`: must be `flutterwave` to enable online checkout;
+  otherwise the provider stays disabled
+- `SONDER_APP_BASE_URL`: public app origin used to build the return URL
+- `FLUTTERWAVE_MODE`: must be `test`
+- `FLUTTERWAVE_SECRET_KEY`: test secret key only
+- `FLUTTERWAVE_WEBHOOK_SECRET_HASH`: dashboard webhook secret hash
+- `FLUTTERWAVE_PAYMENT_OPTIONS`: optional comma-separated allowlisted methods;
+  supported values in this build are `card` and `mobilemoneyzambia`
 
-## Future Settlement Rules
+No Flutterwave variable may use `NEXT_PUBLIC_`. The app returns sanitized
+configuration errors and never logs or sends provider credentials to the browser.
+Live-mode keys intentionally fail closed in Change Set 7.
 
-A provider payment must not settle an invoice unless all of these checks pass:
+If `FLUTTERWAVE_PAYMENT_OPTIONS` is omitted or empty, Sonder omits
+`payment_options` from the checkout request and lets Flutterwave dashboard and
+account preferences decide what appears. If set, every method must be in the
+allowlist; `mobilemoneyzambia` is included only when deliberately configured.
+Actual card and mobile-money availability depends on Flutterwave merchant
+account, country, currency, dashboard settings, and provider enablement.
 
-- provider verification reports a successful payment status
-- the provider result matches Sonder's stored transaction reference
-- the provider result matches the expected invoice
-- the amount matches the invoice amount being paid
-- the currency matches the invoice currency
-- the transaction has not previously been processed
-- the payment has not already been allocated
-- the result comes from trusted server-side verification, not browser-return
-  parameters
+## Checkout Flow
 
-Payment confirmation must happen inside a database transaction that locks or
-conditionally updates the payment and invoice rows, records the provider outcome,
-and allocates the payment exactly once.
+1. An authenticated active member submits `Pay online` for one of their payable
+   invoices.
+2. The server re-reads membership and invoice ownership, derives amount and
+   currency from the database, and creates or reuses one active
+   `OnlinePaymentAttempt`. The rendered form nonce is hashed into
+   `checkoutIdempotencyKey` so the same submitted form reuses the same attempt.
+3. The Flutterwave checkout call happens outside the Prisma financial
+   transaction and uses a bounded request timeout.
+4. A second short transaction stores the validated checkout URL and checkout
+   metadata only if the attempt is still in `PROCESSING`.
+5. The member is redirected only to an allowlisted Flutterwave checkout URL.
 
-## Webhook And Return Design
+The browser never submits authoritative membership, amount, currency, or
+provider reference data. Repeat clicks reuse a ready active attempt or return a
+processing message while checkout creation is in flight. A stale in-flight
+attempt is terminalized before a new trusted reference can be created.
 
-The browser return or success page is never sufficient proof of payment. A user
-return can only trigger a server-side status check and show a pending or
-verifying state.
+## Return And Webhooks
 
-Flutterwave webhooks may be delivered more than once. Webhook processing must be
-idempotent, keyed by the provider event ID and Sonder transaction reference
-where available.
+The member return page treats all query parameters as untrusted. It may use
+`tx_ref` and `transaction_id` as hints to locate the stored attempt, verify
+membership ownership, and request a bounded server-side status check.
 
-Mobile-money and other off-session payment methods may complete asynchronously.
-A webhook may report a pending payment later becoming successful or failed, and
-Sonder must also be able to poll/check status after a webhook or return.
+The webhook route is `POST /api/billing/flutterwave/webhook`. It rejects missing
+or invalid `verif-hash`, malformed UTF-8/JSON, invalid `Content-Length`, and
+payloads above 256 KB. A signed webhook is still never enough to give value:
+successful webhook events trigger the transaction verification endpoint with a
+bounded timeout, and only the verified response can settle an invoice.
 
-A future webhook endpoint must validate the signed event using the raw request
-body and provider signature header before parsing the payload. Invalid
-signatures must be rejected before any state changes. Valid webhook data should
-still be re-verified server-side with the provider before value is given.
+`ProviderWebhookEvent` stores the provider event identity when present, otherwise
+a deterministic event key derived from event type, provider transaction ID,
+Sonder reference, and a SHA-256 payload hash. Duplicate webhook delivery returns
+success without repeating settlement, notifications, or email-outbox jobs.
 
-Provider errors and payloads must be sanitised before logging. Logs must not
-contain card details, mobile-money PINs, access tokens, secret keys, or raw
-sensitive provider payloads.
+## Settlement Rules
 
-## Credential Rules
+Successful provider verification must match exactly:
 
-Flutterwave credentials must never be exposed to the browser. Sonder must not
-store card details, mobile-money PINs, provider access tokens, provider secret
-keys, or webhook secret hashes in billing records. Runtime credentials belong in
-server-only environment configuration when a real integration is built later.
+- Flutterwave status `successful`
+- provider transaction ID
+- Sonder `tx_ref`
+- attempt provider
+- membership and invoice through the stored attempt
+- amount in minor units
+- currency
+- not already settled to another payment
 
-## Current Change Set 6 State
+Settlement runs inside the existing serializable billing transaction retry
+helper. It creates or reuses one confirmed `MembershipPayment`, allocates the
+invoice exactly once, updates invoice status and `paidAt`, links the attempt to
+the payment, and creates member notification/email-outbox records in the same
+transaction.
 
-- the disabled payment provider remains the only implementation
-- no Flutterwave SDK is installed
-- no Flutterwave API is called
-- no real Flutterwave credentials are present
-- no public webhook endpoint exists
-- no functional Pay Online button exists
-- no provider payment is marked available
-- no migration was added solely for provider credentials
-- migrations are not applied by this change set
+Pending or processing provider statuses remain processing. Failed, cancelled,
+reversed, incomplete, unknown, or mismatched statuses do not settle value.
 
-Reference docs for the future implementation:
+## Review And Reconciliation
 
-- Flutterwave Standard hosted checkout: https://developer.flutterwave.com/v3.0/docs/flutterwave-standard-1
-- Flutterwave webhooks and signed events: https://developer.flutterwave.com/docs/webhooks
-- Flutterwave general payment flow and asynchronous verification: https://developer.flutterwave.com/docs/main-payment-flow
+If a manual payment changes the invoice after checkout starts, settlement checks
+the current balance. If the verified provider amount no longer equals the
+current payable balance, the attempt moves to `REVIEW_REQUIRED`; Sonder preserves
+the verified provider transaction and notifies admins without allocating or
+discarding funds.
+
+The admin billing page includes an online-payment reconciliation section with
+safe actions to recheck provider status or flag an attempt for review. Moderators
+cannot access these actions, and admins cannot manually mark an unverified
+online attempt as paid.
+
+The reconciliation foundation can find stale processing attempts and re-run the
+same provider verification and settlement path. A future scheduled job should
+invoke that service from a server-only authenticated/cron-protected route or job
+runner, with bounded batches and the existing provider cooldown. No Vercel Cron
+or scheduler is added in Change Set 7.
+
+## Account-Specific Dashboard Items
+
+Confirm in Flutterwave before any real sandbox checkout:
+
+- Test mode is active and the secret key is a test key.
+- Webhook URL points to `/api/billing/flutterwave/webhook`.
+- Webhook secret hash exactly matches `FLUTTERWAVE_WEBHOOK_SECRET_HASH`.
+- Webhook retries are enabled.
+- `payment_options` behavior is compatible with dashboard preferences.
+- Card and `mobilemoneyzambia` are enabled for the Sonder merchant account and
+  ZMW checkout before either method is placed in `FLUTTERWAVE_PAYMENT_OPTIONS`.
+
+## Local Testing
+
+Run:
+
+```bash
+npm.cmd run db:generate
+npm.cmd run test:billing
+npm.cmd run lint
+npx.cmd tsc --noEmit
+npm.cmd run build
+npx.cmd prisma migrate status
+```
+
+Automated tests use local fake payloads and fake environment values only. They
+must not require real Flutterwave credentials or network access.
+
+## Deferred
+
+- Applying the new migration
+- Live mode enablement
+- Automatic refunds
+- Scheduled reconciliation execution
+- Production webhook promotion
